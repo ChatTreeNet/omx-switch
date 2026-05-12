@@ -485,6 +485,67 @@ describe('/api/opencode-config', () => {
     }));
   });
 
+  it('preserves hidden secrets inside unknown top-level object sections during sanitized POST round trips', async () => {
+    const configWithUnknownSection = {
+      ...richV4Config,
+      mcp: {
+        filesystem: {
+          command: 'npx',
+          args: ['-y', '@modelcontextprotocol/server-filesystem'],
+          env: {
+            api_token: 'mcp-token-should-not-leak',
+            mode: 'readonly',
+          },
+        },
+      },
+    };
+
+    mockReadConfig.mockResolvedValueOnce(configWithUnknownSection);
+    const getResponse = await GET();
+    const getData = await getResponse.json();
+
+    expect(getResponse.status).toBe(200);
+    expect(getData.mcp.filesystem.env).toEqual({ mode: 'readonly' });
+    expect(JSON.stringify(getData)).not.toContain('mcp-token-should-not-leak');
+
+    mockReadConfig.mockResolvedValueOnce(configWithUnknownSection);
+    mockWriteConfig.mockResolvedValueOnce();
+
+    const postResponse = await POST(createPostRequest({
+      ...getData,
+      mcp: {
+        ...getData.mcp,
+        filesystem: {
+          ...getData.mcp.filesystem,
+          timeoutMs: 1000,
+        },
+      },
+    }));
+    const postData = await postResponse.json();
+
+    expect(postResponse.status).toBe(200);
+    expect(postData.mcp.filesystem).toEqual(expect.objectContaining({
+      command: 'npx',
+      timeoutMs: 1000,
+      env: { mode: 'readonly' },
+    }));
+    expect(JSON.stringify(postData)).not.toContain('mcp-token-should-not-leak');
+    expect(postData.mcp.filesystem.env).not.toHaveProperty('api_token');
+
+    const writtenConfig = mockWriteConfig.mock.calls[0][0] as Record<string, unknown>;
+    expect(writtenConfig.mcp).toEqual({
+      filesystem: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem'],
+        env: {
+          api_token: 'mcp-token-should-not-leak',
+          mode: 'readonly',
+        },
+        timeoutMs: 1000,
+      },
+    });
+  });
+
   it.each([
     ['apiKey', { agents: { sisyphus: { apiKey: 'sk-test' } } }],
     ['apikey', { agents: { sisyphus: { apikey: 'sk-test' } } }],
@@ -493,6 +554,7 @@ describe('/api/opencode-config', () => {
     ['token', { vibepulse: { token: 'secret-token' } }],
     ['password', { categories: { ultrabrain: { password: 'secret-password' } } }],
     ['nested secret-like keys', { agents: { sisyphus: { thinking: { access_token: 'nested-token' } } } }],
+    ['unknown top-level object nested secret-like keys', { mcp: { filesystem: { env: { api_token: 'nested-token' } } } }],
   ])('rejects secret-like POST field %s without writing config', async (_name, payload) => {
     mockReadConfig.mockResolvedValue(richV4Config);
     mockWriteConfig.mockResolvedValue();

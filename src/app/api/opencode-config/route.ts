@@ -107,6 +107,20 @@ function stripSecretLikeFields(value: unknown, path = ''): unknown {
   return safeValue;
 }
 
+function mergeUnknownConfigValue(currentValue: unknown, submittedValue: unknown): unknown {
+  if (!isPlainObject(currentValue) || !isPlainObject(submittedValue)) {
+    return submittedValue;
+  }
+
+  const mergedValue: Record<string, unknown> = { ...currentValue };
+
+  for (const [key, childValue] of Object.entries(submittedValue)) {
+    mergedValue[key] = mergeUnknownConfigValue(mergedValue[key], childValue);
+  }
+
+  return mergedValue;
+}
+
 function badRequest(error: string) {
   return NextResponse.json({ error }, { status: 400 });
 }
@@ -466,7 +480,7 @@ export async function POST(request: NextRequest) {
 
   for (const [field, value] of Object.entries(body)) {
     if (field !== 'agents' && field !== 'categories' && field !== 'vibepulse' && field !== 'team_mode') {
-      newConfig[field] = value;
+      newConfig[field] = mergeUnknownConfigValue(newConfig[field], value);
     }
   }
 
