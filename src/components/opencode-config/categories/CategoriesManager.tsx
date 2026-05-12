@@ -98,7 +98,9 @@ export function CategoriesManager({ onSaveSuccess }: CategoriesManagerProps) {
 
   const handleDeleteCategory = (categoryKey: string) => {
     const currentCategories = config?.categories || {};
-    const { [categoryKey]: _removed, ...updatedCategories } = currentCategories;
+    const updatedCategories = Object.fromEntries(
+      Object.entries(currentCategories).filter(([key]) => key !== categoryKey)
+    );
     saveMutation.mutate(updatedCategories);
   };
 
