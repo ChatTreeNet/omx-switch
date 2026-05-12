@@ -11,8 +11,16 @@ export const LEGACY_CONFIG_PATH = join(CONFIG_DIR, 'oh-my-opencode.jsonc');
 export const PROJECT_CONFIG_DIR = '.opencode';
 export const PROJECT_CONFIG_JSONC = 'oh-my-openagent.jsonc';
 export const PROJECT_CONFIG_JSON = 'oh-my-openagent.json';
+export const LEGACY_PROJECT_CONFIG_JSONC = 'oh-my-opencode.jsonc';
+export const LEGACY_PROJECT_CONFIG_JSON = 'oh-my-opencode.json';
 export const OH_MY_OPENAGENT_CONFIG_SCHEMA = 'https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/master/assets/oh-my-openagent.schema.json';
 export const DEFAULT_OPEN_EDITOR_TARGET_MODE: OpenEditorTargetMode = 'remote';
+const PROJECT_CONFIG_FILENAMES = [
+  PROJECT_CONFIG_JSONC,
+  PROJECT_CONFIG_JSON,
+  LEGACY_PROJECT_CONFIG_JSONC,
+  LEGACY_PROJECT_CONFIG_JSON,
+];
 
 export type OpenCodeConfig = OhMyOpenAgentConfig;
 
@@ -97,14 +105,11 @@ export function findProjectConfigPath(startDir: string = process.cwd()): string 
   let currentDir = startDir;
 
   while (true) {
-    const jsoncPath = join(currentDir, PROJECT_CONFIG_DIR, PROJECT_CONFIG_JSONC);
-    if (existsSync(jsoncPath)) {
-      return jsoncPath;
-    }
-
-    const jsonPath = join(currentDir, PROJECT_CONFIG_DIR, PROJECT_CONFIG_JSON);
-    if (existsSync(jsonPath)) {
-      return jsonPath;
+    for (const filename of PROJECT_CONFIG_FILENAMES) {
+      const configPath = join(currentDir, PROJECT_CONFIG_DIR, filename);
+      if (existsSync(configPath)) {
+        return configPath;
+      }
     }
 
     const parentDir = dirname(currentDir);

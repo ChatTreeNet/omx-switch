@@ -284,6 +284,68 @@ describe('opencodeConfig', () => {
       }
     });
 
+    it('finds a nearest legacy jsonc project config while reading effective config', async () => {
+      const testDir = await mkdtemp(join(tmpdir(), 'vibepulse-effective-'));
+      const userConfigPath = join(testDir, 'user.jsonc');
+      const nestedDir = join(testDir, 'workspace', 'src');
+      const projectConfigPath = join(testDir, 'workspace', '.opencode', 'oh-my-opencode.jsonc');
+
+      try {
+        await mkdir(nestedDir, { recursive: true });
+        await mkdir(dirname(projectConfigPath), { recursive: true });
+        await writeFile(userConfigPath, '{"agents":{"sisyphus":{"model":"user"}}}');
+        await writeFile(projectConfigPath, '{"agents":{"sisyphus":{"variant":"legacy-jsonc"}}}');
+
+        expect(findProjectConfigPath(nestedDir)).toBe(projectConfigPath);
+
+        const config = await readEffectiveConfig({ userConfigPath, projectStartDir: nestedDir });
+
+        expect(config.agents?.sisyphus).toEqual({ model: 'user', variant: 'legacy-jsonc' });
+      } finally {
+        await rm(testDir, { recursive: true, force: true });
+      }
+    });
+
+    it('finds a nearest legacy json project config while reading effective config', async () => {
+      const testDir = await mkdtemp(join(tmpdir(), 'vibepulse-effective-'));
+      const userConfigPath = join(testDir, 'user.jsonc');
+      const nestedDir = join(testDir, 'workspace', 'src');
+      const projectConfigPath = join(testDir, 'workspace', '.opencode', 'oh-my-opencode.json');
+
+      try {
+        await mkdir(nestedDir, { recursive: true });
+        await mkdir(dirname(projectConfigPath), { recursive: true });
+        await writeFile(userConfigPath, '{"agents":{"sisyphus":{"model":"user"}}}');
+        await writeFile(projectConfigPath, '{"agents":{"sisyphus":{"variant":"legacy-json"}}}');
+
+        expect(findProjectConfigPath(nestedDir)).toBe(projectConfigPath);
+
+        const config = await readEffectiveConfig({ userConfigPath, projectStartDir: nestedDir });
+
+        expect(config.agents?.sisyphus).toEqual({ model: 'user', variant: 'legacy-json' });
+      } finally {
+        await rm(testDir, { recursive: true, force: true });
+      }
+    });
+
+    it('prefers canonical project config over legacy project config in the same directory', async () => {
+      const projectRoot = await mkdtemp(join(tmpdir(), 'vibepulse-project-'));
+      const nestedDir = join(projectRoot, 'src');
+      const canonicalProjectConfig = join(projectRoot, '.opencode', 'oh-my-openagent.jsonc');
+      const legacyProjectConfig = join(projectRoot, '.opencode', 'oh-my-opencode.jsonc');
+
+      try {
+        await mkdir(nestedDir, { recursive: true });
+        await mkdir(dirname(canonicalProjectConfig), { recursive: true });
+        await writeFile(canonicalProjectConfig, '{"project":{"name":"canonical"}}');
+        await writeFile(legacyProjectConfig, '{"project":{"name":"legacy"}}');
+
+        expect(findProjectConfigPath(nestedDir)).toBe(canonicalProjectConfig);
+      } finally {
+        await rm(projectRoot, { recursive: true, force: true });
+      }
+    });
+
     it('ignores a corrupt project file when reading effective config', async () => {
       const testDir = await mkdtemp(join(tmpdir(), 'vibepulse-effective-'));
       const userConfigPath = join(testDir, 'user.jsonc');
