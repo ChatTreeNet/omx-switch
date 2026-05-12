@@ -53,6 +53,25 @@ describe('/api/opencode-models', () => {
       expect(result.source).toBe('opencode');
       expect(result.models).toContain('anthropic/claude');
     });
+
+    it('should trim models and ignore provider headers, whitespace, and stderr noise', () => {
+      const result = handleExecResult(
+        null,
+        '\nAnthropic\n  anthropic/claude-3.5-sonnet  \n\nOpenAI\n\topenai/gpt-4o\t\nLoaded 2 providers\n',
+        'debug: provider cache refreshed\nwarning: extra stderr noise'
+      );
+
+      expect(result.source).toBe('opencode');
+      expect(result.models).toEqual(['anthropic/claude-3.5-sonnet', 'openai/gpt-4o']);
+    });
+
+    it('should reject non-slash CLI output as an error', () => {
+      const result = handleExecResult(null, 'Anthropic\nOpenAI\nNo models configured\n', '');
+
+      expect(result.source).toBe('error');
+      expect(result.models).toEqual([]);
+      expect(result.error).toContain('No models found');
+    });
   });
 
   describe('GET API Integration Tests', () => {
