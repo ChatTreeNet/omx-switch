@@ -129,6 +129,46 @@ describe('opencodeDiscovery', () => {
     );
   });
 
+  it('accepts documented healthy health response for the default candidate', async () => {
+    const discovery = await loadDiscovery();
+    setupCommandOutputs({
+      psCommand: 'opencode serve\n',
+      probePorts: { 4096: { health: true, healthBody: '{"healthy":true,"version":"1.14.48"}' } },
+    });
+
+    const result = discovery.discoverOpencodePortsWithMeta();
+
+    expect(result).toEqual({ ports: [4096], timedOut: false });
+    expect(probeUrls()).toEqual([
+      expect.stringContaining('http://127.0.0.1:4096/global/health'),
+    ]);
+  });
+
+  it('rejects unhealthy or versionless health responses unless /doc is valid', async () => {
+    const discovery = await loadDiscovery();
+    setupCommandOutputs({
+      psCommand: 'opencode serve\n',
+      probePorts: {
+        4096: { health: true, healthBody: '{"healthy":false,"version":"1.14.48"}', doc: false },
+      },
+    });
+
+    expect(discovery.discoverOpencodePortsWithMeta()).toEqual({ ports: [], timedOut: false });
+    expect(probeUrls()).toEqual([
+      expect.stringContaining('http://127.0.0.1:4096/global/health'),
+      expect.stringContaining('http://127.0.0.1:4096/doc'),
+    ]);
+
+    setupCommandOutputs({
+      psCommand: 'opencode serve\n',
+      probePorts: {
+        4096: { health: true, healthBody: '{"healthy":true}', doc: false },
+      },
+    });
+
+    expect(discovery.discoverOpencodePortsWithMeta()).toEqual({ ports: [], timedOut: false });
+  });
+
   it('accepts default candidate when /doc succeeds after health fails', async () => {
     const discovery = await loadDiscovery();
     setupCommandOutputs({

@@ -53,9 +53,10 @@ function isOpenCodeHealthResponse(body: string): boolean {
   }
 
   const health = parsed.health;
+  const healthy = parsed.healthy;
   const version = parsed.version;
   return (
-    health === 'ok' &&
+    (health === 'ok' || healthy === true) &&
     typeof version === 'string' &&
     /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)
   );
