@@ -10,6 +10,7 @@ interface GeneralSettingsFormData {
   stickyBusyDelaySeconds: number;
   sessionsRefreshIntervalSeconds: number;
   openEditorTargetMode: OpenEditorTargetMode;
+  teamModeEnabled: boolean;
 }
 
 interface VibepulseConfig {
@@ -18,8 +19,14 @@ interface VibepulseConfig {
   openEditorTargetMode?: OpenEditorTargetMode;
 }
 
+interface TeamModeConfig {
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+
 interface ConfigResponse {
   vibepulse?: VibepulseConfig;
+  team_mode?: TeamModeConfig;
   [key: string]: unknown;
 }
 
@@ -48,7 +55,8 @@ export function GeneralSettingsForm() {
     defaultValues: {
       stickyBusyDelaySeconds: 1,
       sessionsRefreshIntervalSeconds: 5,
-      openEditorTargetMode: 'remote'
+      openEditorTargetMode: 'remote',
+      teamModeEnabled: false,
     }
   });
 
@@ -61,7 +69,8 @@ export function GeneralSettingsForm() {
         sessionsRefreshIntervalSeconds: typeof config.vibepulse?.sessionsRefreshIntervalMs === 'number'
           ? Math.round(config.vibepulse.sessionsRefreshIntervalMs / 1000)
           : 5,
-        openEditorTargetMode: config.vibepulse?.openEditorTargetMode === 'hub' ? 'hub' : 'remote'
+        openEditorTargetMode: config.vibepulse?.openEditorTargetMode === 'hub' ? 'hub' : 'remote',
+        teamModeEnabled: config.team_mode?.enabled ?? false,
       });
     }
   }, [config, reset]);
@@ -80,9 +89,14 @@ export function GeneralSettingsForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           vibepulse: {
+            ...config?.vibepulse,
             stickyBusyDelayMs: data.stickyBusyDelaySeconds * 1000,
             sessionsRefreshIntervalMs: data.sessionsRefreshIntervalSeconds * 1000,
             openEditorTargetMode: data.openEditorTargetMode
+          },
+          team_mode: {
+            ...(config?.team_mode ?? {}),
+            enabled: data.teamModeEnabled
           }
         })
       });
@@ -264,6 +278,31 @@ export function GeneralSettingsForm() {
             />
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               How often the board polls the server for session updates. Lower values provide more real-time feedback but increase server load. Default is 5 seconds.
+            </p>
+          </div>
+
+          <div className="space-y-3 border-t border-zinc-100 pt-6 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <Controller
+                name="teamModeEnabled"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    id="team-mode-enabled"
+                    type="checkbox"
+                    checked={field.value}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                    className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:ring-blue-600 dark:focus:ring-offset-zinc-900"
+                    aria-label="Enable Team Mode"
+                  />
+                )}
+              />
+              <label htmlFor="team-mode-enabled" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                Enable Team Mode
+              </label>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 pl-7">
+              When enabled, team mode allows multiple developers to collaborate via shared agents and a combined workflow inbox. (Requires oh-my-opencode v4.0.0+)
             </p>
           </div>
         </div>

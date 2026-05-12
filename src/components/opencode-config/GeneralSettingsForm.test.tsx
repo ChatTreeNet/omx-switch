@@ -51,6 +51,10 @@ describe('GeneralSettingsForm', () => {
             sessionsRefreshIntervalMs: 5000,
             openEditorTargetMode: 'remote',
           },
+          team_mode: {
+            enabled: false,
+            other_field: 'unmodified',
+          }
         }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -69,6 +73,9 @@ describe('GeneralSettingsForm', () => {
 
     const select = await screen.findByLabelText('Remote open target');
     await user.selectOptions(select, 'hub');
+    const toggle = await screen.findByRole('checkbox', { name: /enable team mode/i });
+    await user.click(toggle);
+
     await user.click(screen.getByRole('button', { name: /save settings/i }));
 
     await waitFor(() => {
@@ -86,6 +93,10 @@ describe('GeneralSettingsForm', () => {
         sessionsRefreshIntervalMs: 5000,
         openEditorTargetMode: 'hub',
       },
+      team_mode: {
+        enabled: true,
+        other_field: 'unmodified',
+      }
     });
   });
 });
