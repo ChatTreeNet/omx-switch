@@ -241,6 +241,55 @@ describe('/api/opencode-config', () => {
     }));
   });
 
+  it.each([
+    ['string', 'yes'],
+    ['number', 1],
+    ['null', null],
+  ])('rejects team_mode.enabled when it is a %s without writing config', async (_name, enabled) => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const response = await POST(createPostRequest({
+      team_mode: {
+        enabled,
+      },
+    }));
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain('team_mode.enabled');
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
+  it('accepts boolean team_mode.enabled updates while preserving unknown sibling fields', async () => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const response = await POST(createPostRequest({
+      team_mode: {
+        enabled: false,
+        rollout_note: 'pause team mode',
+      },
+    }));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.team_mode).toEqual({
+      enabled: false,
+      workspace: 'team-alpha',
+      future_policy: { approval: 'required' },
+      rollout_note: 'pause team mode',
+    });
+    expect(mockWriteConfig).toHaveBeenCalledWith(expect.objectContaining({
+      team_mode: {
+        enabled: false,
+        workspace: 'team-alpha',
+        future_policy: { approval: 'required' },
+        rollout_note: 'pause team mode',
+      },
+    }));
+  });
+
   it('round-trips v4 config fields through GET, POST write, and GET readback', async () => {
     mockReadConfig.mockResolvedValueOnce(richV4Config);
 

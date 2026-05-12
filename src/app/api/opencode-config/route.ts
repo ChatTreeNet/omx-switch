@@ -343,6 +343,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (
+      isPlainObject(teamMode) &&
+      Object.prototype.hasOwnProperty.call(teamMode, 'enabled') &&
+      typeof teamMode.enabled !== 'boolean'
+    ) {
+      return NextResponse.json(
+        { error: 'team_mode.enabled must be a boolean' },
+        { status: 400 }
+      );
+    }
+
     // Read current config
     const currentConfig = await readConfig();
     const currentAgents = currentConfig.agents || {};
