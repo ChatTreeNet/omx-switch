@@ -31,7 +31,7 @@ function setupCommandOutputs({
 }: {
   lsof?: string;
   psCommand?: string;
-  probePorts?: Record<number, { health?: boolean; doc?: boolean }>;
+  probePorts?: Record<number, { health?: boolean; doc?: boolean; healthBody?: string; docBody?: string }>;
   timeoutCommands?: string[];
 }): void {
   execSyncMock.mockImplementation((command: unknown) => {
@@ -55,9 +55,12 @@ function setupCommandOutputs({
       const match = text.match(/127\.0\.0\.1:(\d+)\//);
       const port = match ? Number(match[1]) : NaN;
       const probe = probePorts[port];
-      const ok = text.includes('/global/health') ? probe?.health : probe?.doc;
+      const isHealth = text.includes('/global/health');
+      const ok = isHealth ? probe?.health : probe?.doc;
       if (ok) {
-        return text.includes('/global/health') ? '{"health":"ok","version":"1.14.48"}' : '{"openapi":"3.0.0"}';
+        return isHealth
+          ? (probe?.healthBody ?? '{"health":"ok","version":"1.14.48"}')
+          : (probe?.docBody ?? '{"openapi":"3.0.0","info":{"title":"OpenCode API","description":"OpenCode docs"}}');
       }
       throw new Error(`probe failed for ${port}`);
     }
@@ -115,7 +118,7 @@ describe('opencodeDiscovery', () => {
     const discovery = await loadDiscovery();
     setupCommandOutputs({
       psCommand: 'opencode serve --port 0\n',
-      probePorts: { 4096: { health: true } },
+      probePorts: { 4096: { health: true, healthBody: '{"health":"ok","version":"1.14.48"}' } },
     });
 
     const result = discovery.discoverOpencodePortsWithMeta();
@@ -130,12 +133,40 @@ describe('opencodeDiscovery', () => {
     const discovery = await loadDiscovery();
     setupCommandOutputs({
       psCommand: 'opencode serve\n',
-      probePorts: { 4096: { health: false, doc: true } },
+      probePorts: {
+        4096: {
+          health: false,
+          doc: true,
+          docBody: '{"openapi":"3.0.0","info":{"title":"OpenCode API","description":"OpenCode docs"}}',
+        },
+      },
     });
 
     const result = discovery.discoverOpencodePortsWithMeta();
 
     expect(result).toEqual({ ports: [4096], timedOut: false });
+    expect(probeUrls()).toEqual([
+      expect.stringContaining('http://127.0.0.1:4096/global/health'),
+      expect.stringContaining('http://127.0.0.1:4096/doc'),
+    ]);
+  });
+
+  it('rejects generic /doc swagger content without an OpenCode signature', async () => {
+    const discovery = await loadDiscovery();
+    setupCommandOutputs({
+      psCommand: 'opencode serve\n',
+      probePorts: {
+        4096: {
+          health: false,
+          doc: true,
+          docBody: '{"openapi":"3.0.0","info":{"title":"Generic API","description":"Generic docs"}}',
+        },
+      },
+    });
+
+    const result = discovery.discoverOpencodePortsWithMeta();
+
+    expect(result).toEqual({ ports: [], timedOut: false });
     expect(probeUrls()).toEqual([
       expect.stringContaining('http://127.0.0.1:4096/global/health'),
       expect.stringContaining('http://127.0.0.1:4096/doc'),

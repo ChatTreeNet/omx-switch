@@ -33,6 +33,50 @@ type ProcessPortDiscovery = {
 
 type ProbeResult = 'ok' | 'failed' | 'timedOut';
 
+function parseJsonResponse(body: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function isOpenCodeHealthResponse(body: string): boolean {
+  const parsed = parseJsonResponse(body);
+  if (!parsed) {
+    return false;
+  }
+
+  const health = parsed.health;
+  const version = parsed.version;
+  return (
+    health === 'ok' &&
+    typeof version === 'string' &&
+    /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)
+  );
+}
+
+function isOpenCodeDocsResponse(body: string): boolean {
+  const parsed = parseJsonResponse(body);
+  if (!parsed || typeof parsed.openapi !== 'string' || !/^3(?:\.\d+)?/.test(parsed.openapi)) {
+    return false;
+  }
+
+  const info = parsed.info;
+  const infoRecord = info && typeof info === 'object' && !Array.isArray(info) ? info as Record<string, unknown> : null;
+  const title = typeof infoRecord?.title === 'string' ? infoRecord.title : '';
+  const description = typeof infoRecord?.description === 'string' ? infoRecord.description : '';
+  const rootTitle = typeof parsed.title === 'string' ? parsed.title : '';
+  const rootDescription = typeof parsed.description === 'string' ? parsed.description : '';
+
+  return [title, description, rootTitle, rootDescription].some((value) => /opencode/i.test(value));
+}
+
 function getDiscoveryCommandTimeoutMs(): number {
   const parsedTimeout = Number(process.env.OPENCODE_DISCOVERY_TIMEOUT_MS);
   return Number.isFinite(parsedTimeout) && parsedTimeout > 0
@@ -195,12 +239,20 @@ function probeOpencodePort(port: number, state: DiscoveryState): ProbeResult {
 
     try {
       const timeoutSeconds = Math.max(0.001, timeoutMs / 1000).toFixed(3);
-      execSync(`curl -fsS --max-time ${timeoutSeconds} http://127.0.0.1:${port}${endpoint}`, {
+      const response = execSync(`curl -fsS --max-time ${timeoutSeconds} http://127.0.0.1:${port}${endpoint}`, {
         encoding: 'utf-8',
         stdio: ['ignore', 'pipe', 'ignore'],
         timeout: timeoutMs,
       });
-      return 'ok';
+
+      const body = typeof response === 'string' ? response : String(response);
+      const isValidProbe = endpoint === '/global/health'
+        ? isOpenCodeHealthResponse(body)
+        : isOpenCodeDocsResponse(body);
+
+      if (isValidProbe) {
+        return 'ok';
+      }
     } catch (error) {
       if (isCommandTimeoutError(error)) {
         state.timedOut = true;
