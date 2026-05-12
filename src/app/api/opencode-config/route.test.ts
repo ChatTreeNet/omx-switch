@@ -492,6 +492,52 @@ describe('/api/opencode-config', () => {
     expect(data.agents.sisyphus.monkey).toBe('patch');
   });
 
+  it('allows secret-like agent and category names when their config fields are safe', async () => {
+    mockReadConfig.mockResolvedValue({ agents: {}, categories: {} });
+    mockWriteConfig.mockResolvedValue();
+
+    const response = await POST(createPostRequest({
+      agents: {
+        auth: { model: 'anthropic/claude-opus-4-6', maxTokens: 64000 },
+        token: { thinking: { enabled: true, budget_tokens: 12000 } },
+      },
+      categories: {
+        private: { model: 'openai/gpt-5.4', reasoningEffort: 'max' },
+      },
+    }));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.agents.auth).toEqual({ model: 'anthropic/claude-opus-4-6', maxTokens: 64000 });
+    expect(data.agents.token).toEqual({ thinking: { enabled: true, budget_tokens: 12000 } });
+    expect(data.categories.private).toEqual({ model: 'openai/gpt-5.4', reasoningEffort: 'max' });
+    expect(mockWriteConfig).toHaveBeenCalledWith(expect.objectContaining({
+      agents: expect.objectContaining({
+        auth: { model: 'anthropic/claude-opus-4-6', maxTokens: 64000 },
+        token: { thinking: { enabled: true, budget_tokens: 12000 } },
+      }),
+      categories: expect.objectContaining({
+        private: { model: 'openai/gpt-5.4', reasoningEffort: 'max' },
+      }),
+    }));
+  });
+
+  it.each([
+    ['agent secret field', { agents: { auth: { apiKey: 'sk-test' } } }],
+    ['agent nested thinking secret field', { agents: { token: { thinking: { access_token: 'nested-token' } } } }],
+    ['category secret field', { categories: { private: { password: 'secret-password' } } }],
+  ])('rejects %s inside secret-like agent/category names without writing config', async (_name, payload) => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const response = await POST(createPostRequest(payload));
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.error).toContain('disallowed');
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
   it('rejects additional concatenated lowercase sensitive fields and separated key tokens', async () => {
     mockReadConfig.mockResolvedValue(richV4Config);
     mockWriteConfig.mockResolvedValue();

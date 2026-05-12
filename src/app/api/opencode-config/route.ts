@@ -54,6 +54,10 @@ function isSecretLikeField(field: string): boolean {
   return false;
 }
 
+function isAgentOrCategoryIdentifierPath(path: string): boolean {
+  return path === 'agents' || path === 'categories';
+}
+
 function collectSecretLikeFields(value: unknown, path = ''): string[] {
   if (Array.isArray(value)) {
     return value.flatMap((entry, index) => collectSecretLikeFields(entry, `${path}[${index}]`));
@@ -67,8 +71,9 @@ function collectSecretLikeFields(value: unknown, path = ''): string[] {
 
   for (const [key, childValue] of Object.entries(value)) {
     const fieldPath = path ? `${path}.${key}` : key;
+    const isMapIdentifier = isAgentOrCategoryIdentifierPath(path);
 
-    if (isSecretLikeField(key)) {
+    if (!isMapIdentifier && isSecretLikeField(key)) {
       disallowedFields.push(fieldPath);
       continue;
     }
@@ -79,9 +84,9 @@ function collectSecretLikeFields(value: unknown, path = ''): string[] {
   return disallowedFields;
 }
 
-function stripSecretLikeFields(value: unknown): unknown {
+function stripSecretLikeFields(value: unknown, path = ''): unknown {
   if (Array.isArray(value)) {
-    return value.map(stripSecretLikeFields);
+    return value.map((entry, index) => stripSecretLikeFields(entry, `${path}[${index}]`));
   }
 
   if (!isPlainObject(value)) {
@@ -91,8 +96,11 @@ function stripSecretLikeFields(value: unknown): unknown {
   const safeValue: Record<string, unknown> = {};
 
   for (const [key, childValue] of Object.entries(value)) {
-    if (!isSecretLikeField(key)) {
-      safeValue[key] = stripSecretLikeFields(childValue);
+    const fieldPath = path ? `${path}.${key}` : key;
+    const isMapIdentifier = isAgentOrCategoryIdentifierPath(path);
+
+    if (isMapIdentifier || !isSecretLikeField(key)) {
+      safeValue[key] = stripSecretLikeFields(childValue, fieldPath);
     }
   }
 
