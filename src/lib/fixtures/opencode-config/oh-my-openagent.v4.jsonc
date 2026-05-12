@@ -1,0 +1,70 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/master/assets/oh-my-openagent.schema.json",
+  "team_mode": {
+    "enabled": true,
+    "workspace": "team-alpha",
+    "future_policy": {
+      "approval": "required"
+    }
+  },
+  "agents": {
+    "sisyphus": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+      "reasoningEffort": "max",
+      "temperature": 0.2,
+      "top_p": 0.9,
+      "maxTokens": 64000,
+      "thinking": {
+        "type": "enabled",
+        "budget_tokens": 12000
+      },
+      "fallback_models": [
+        "openai/gpt-5.4",
+        {
+          "model": "google/gemini-3.1-pro",
+          "variant": "high",
+          "reasoningEffort": "max",
+          "temperature": 0.1,
+          "top_p": 0.95,
+          "maxTokens": 32000,
+          "thinking": {
+            "enabled": true,
+            "budget": 8000
+          },
+          "futureFallbackField": "preserve-me"
+        }
+      ],
+      "future_agent_knob": {
+        "mode": "experimental"
+      }
+    }
+  },
+  "categories": {
+    "ultrabrain": {
+      "model": "openai/gpt-5.4",
+      "variant": "xhigh",
+      "reasoningEffort": "max",
+      "maxTokens": 48000,
+      "thinking": {
+        "enabled": true
+      },
+      "fallback_models": [
+        "anthropic/claude-opus-4-6",
+        {
+          "model": "google/gemini-3.1-pro",
+          "variant": "max",
+          "reasoningEffort": "max",
+          "maxTokens": 32000,
+          "thinking": {
+            "enabled": true
+          }
+        }
+      ],
+      "future_category_knob": "keep-me"
+    }
+  },
+  "future_top_level": {
+    "enabled": true
+  }
+}
