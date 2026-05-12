@@ -414,6 +414,9 @@ describe('/api/opencode-config', () => {
 
   it.each([
     ['apiKey', { agents: { sisyphus: { apiKey: 'sk-test' } } }],
+    ['apikey', { agents: { sisyphus: { apikey: 'sk-test' } } }],
+    ['accesstoken', { agents: { sisyphus: { accesstoken: 'token-test' } } }],
+    ['privatekey', { agents: { sisyphus: { privatekey: 'key-test' } } }],
     ['token', { vibepulse: { token: 'secret-token' } }],
     ['password', { categories: { ultrabrain: { password: 'secret-password' } } }],
     ['nested secret-like keys', { agents: { sisyphus: { thinking: { access_token: 'nested-token' } } } }],
@@ -427,5 +430,74 @@ describe('/api/opencode-config', () => {
     expect(response.status).toBe(403);
     expect(data.error).toContain('disallowed');
     expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
+  it('preserves safe unknown fields containing secret-like substrings (e.g., keyboard, monkey)', async () => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const payload = {
+      agents: {
+        sisyphus: {
+          keyboard: 'mechanical',
+          monkey: 'patch',
+        },
+      },
+    };
+
+    const response = await POST(createPostRequest(payload));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.agents.sisyphus.keyboard).toBe('mechanical');
+    expect(data.agents.sisyphus.monkey).toBe('patch');
+  });
+
+  it('rejects additional concatenated lowercase sensitive fields and separated key tokens', async () => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const additionalRejections = [
+      'accesskey',
+      'authtoken',
+      'secretkey',
+      'passwordhash',
+      'credential',
+      'monkey_key',
+      'board_key',
+      'monkeyKey',
+      'boardKey',
+      'token_limit',
+      'token_count'
+    ];
+
+    for (const field of additionalRejections) {
+      const response = await POST(createPostRequest({
+        agents: { sisyphus: { [field]: 'should-fail' } }
+      }));
+      expect(response.status).toBe(403);
+    }
+  });
+
+  it('filters out concatenated secrets from GET response', async () => {
+    mockReadConfig.mockResolvedValue({
+      agents: {
+        sisyphus: {
+          apikey: 'leak-1',
+          accesstoken: 'leak-2',
+          privatekey: 'leak-3',
+          keyboard: 'keep-me'
+        }
+      }
+    });
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.agents.sisyphus.keyboard).toBe('keep-me');
+    expect(data.agents.sisyphus).not.toHaveProperty('apikey');
+    expect(data.agents.sisyphus).not.toHaveProperty('accesstoken');
+    expect(data.agents.sisyphus).not.toHaveProperty('privatekey');
   });
 });
