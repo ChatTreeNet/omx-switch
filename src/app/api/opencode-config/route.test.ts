@@ -115,6 +115,23 @@ describe('/api/opencode-config', () => {
     expect(mockWriteConfig).not.toHaveBeenCalled();
   });
 
+  it('rejects array request bodies', async () => {
+    const arrayBodies = [[], ['item'], [{ key: 'value' }]];
+
+    for (const body of arrayBodies) {
+      const response = await POST(new Request('http://localhost/api/opencode-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }) as never);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe('Invalid request body');
+      expect(mockWriteConfig).not.toHaveBeenCalled();
+    }
+  });
+
   it('persists a valid openEditorTargetMode update', async () => {
     mockReadConfig.mockResolvedValue({
       vibepulse: {
