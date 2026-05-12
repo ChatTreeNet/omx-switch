@@ -13,6 +13,8 @@ const SECRET_FIELD_PATTERNS = [
   'cert',
 ];
 
+const SAFE_TOKEN_FIELD_NAMES = new Set(['max_tokens', 'budget_tokens']);
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -26,11 +28,7 @@ function isSecretLikeField(field: string): boolean {
 
   // 1. Check for separated or camelCase fields (exact token matches)
   if (parts.some((p) => p !== '' && SECRET_FIELD_PATTERNS.includes(p))) {
-    // If it is a token match, verify it's not a common non-secret configuration
-    // (e.g. maxTokens, budget_tokens)
-    const hasToken = parts.includes('token');
-
-    if (hasToken && parts.some((p) => p === 'max' || p === 'budget')) {
+    if (SAFE_TOKEN_FIELD_NAMES.has(normalizedField)) {
       return false;
     }
 

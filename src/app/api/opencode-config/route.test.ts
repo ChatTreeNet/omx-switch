@@ -456,6 +456,21 @@ describe('/api/opencode-config', () => {
     expect(mockWriteConfig).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['max_api_token', { agents: { sisyphus: { max_api_token: 'should-fail' } } }],
+    ['budget_secret_token', { agents: { sisyphus: { thinking: { budget_secret_token: 'should-fail' } } } }],
+  ])('rejects unsafe token exception bypass field %s without writing config', async (_name, payload) => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const response = await POST(createPostRequest(payload));
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.error).toContain('disallowed');
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
   it('preserves safe unknown fields containing secret-like substrings (e.g., keyboard, monkey)', async () => {
     mockReadConfig.mockResolvedValue(richV4Config);
     mockWriteConfig.mockResolvedValue();
