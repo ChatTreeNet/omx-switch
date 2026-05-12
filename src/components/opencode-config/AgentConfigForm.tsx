@@ -12,6 +12,8 @@ interface AgentConfig {
   top_p?: number;
   variant?: string;
   prompt_append?: string;
+  reasoningEffort?: string;
+  fallback_models?: unknown;
 }
 
 interface CategoryConfig {
@@ -47,6 +49,9 @@ interface AgentConfigFormData {
   top_p: number;
   variant: string;
   prompt_append: string;
+  reasoningEffort: string;
+  fallbackModelsObj?: unknown;
+  fallback_models: string;
 }
 
 interface AgentConfigFormProps {
@@ -99,6 +104,9 @@ export function AgentConfigForm({
       top_p: 1,
       variant: '',
       prompt_append: '',
+      reasoningEffort: '',
+      fallbackModelsObj: undefined,
+      fallback_models: '',
     },
   });
 
@@ -149,6 +157,11 @@ export function AgentConfigForm({
         top_p: currentAgentConfig.top_p ?? 1,
         variant: currentAgentConfig.variant || '',
         prompt_append: currentAgentConfig.prompt_append || '',
+        reasoningEffort: currentAgentConfig.reasoningEffort || '',
+        fallbackModelsObj: currentAgentConfig.fallback_models,
+        fallback_models: currentAgentConfig.fallback_models
+          ? JSON.stringify(currentAgentConfig.fallback_models, null, 2)
+          : '',
       });
     }
   }, [config, agentName, reset]);
@@ -161,13 +174,13 @@ export function AgentConfigForm({
   }, [toast]);
 
   const saveMutation = useMutation({
-    mutationFn: async (data: AgentConfigFormData) => {
+    mutationFn: async (payloadData: AgentConfig) => {
       const res = await fetch('/api/opencode-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           agents: {
-            [agentName]: data,
+            [agentName]: payloadData,
           },
         }),
       });
@@ -190,7 +203,35 @@ export function AgentConfigForm({
   });
 
   const onSubmit = (data: AgentConfigFormData) => {
-    saveMutation.mutate(data);
+    let parsedFallback = undefined;
+    if (data.fallback_models.trim() !== '') {
+      try {
+        parsedFallback = JSON.parse(data.fallback_models);
+      } catch {
+        setToast({ type: 'error', message: 'Invalid JSON in fallback_models' });
+        return;
+      }
+    }
+
+    type AgentConfigPayload = Omit<AgentConfig, 'reasoningEffort' | 'fallback_models'> & {
+      reasoningEffort?: AgentConfig['reasoningEffort'] | null;
+      fallback_models?: AgentConfig['fallback_models'] | null;
+    };
+
+    const payload: AgentConfigPayload = {
+      model: data.model,
+      temperature: data.temperature,
+      top_p: data.top_p,
+      variant: data.variant,
+      prompt_append: data.prompt_append,
+    };
+    if (data.reasoningEffort) payload.reasoningEffort = data.reasoningEffort as AgentConfig['reasoningEffort'];
+    else payload.reasoningEffort = null;
+    
+    if (parsedFallback !== undefined) payload.fallback_models = parsedFallback;
+    else payload.fallback_models = null;
+
+    saveMutation.mutate(payload as AgentConfig);
   };
 
   const currentAgentConfig = config?.agents?.[agentName];
@@ -284,22 +325,23 @@ export function AgentConfigForm({
           name="model"
           control={control}
           rules={{ required: 'Please select a model' }}
-          render={({ field, fieldState }) => (
+          render={({ field, fieldState }) => {
+            return (
             <>
               <div id="model-selector">
                 <AgentModelSelector
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(val) => { field.onChange(val); }}
                   placeholder="Select a model..."
                 />
               </div>
               {fieldState.error && (
-                <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+                <p role="alert" className="text-xs text-red-600 dark:text-red-400">
                   {fieldState.error.message}
                 </p>
               )}
             </>
-          )}
+          )}}
         />
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           The AI model used for this agent.
@@ -331,6 +373,33 @@ export function AgentConfigForm({
         />
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Model reasoning variant. Higher values mean more thinking.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="reasoning-effort-selector" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          Reasoning Effort
+        </label>
+        <Controller
+          name="reasoningEffort"
+          control={control}
+          render={({ field }) => (
+            <select
+              id="reasoning-effort-selector"
+              value={field.value}
+              onChange={(e) => field.onChange(e.target.value)}
+              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+            >
+              <option value="">Not set</option>
+              <option value="high">high</option>
+              <option value="medium">medium</option>
+              <option value="low">low</option>
+              <option value="max">max</option>
+            </select>
+          )}
+        />
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Controls the reasoning effort for compatible models like o1 or o3-mini.
         </p>
       </div>
 
@@ -461,6 +530,29 @@ export function AgentConfigForm({
         />
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Additional instructions appended to the system prompt.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="fallback-models" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          Fallback Models (JSON)
+        </label>
+        <Controller
+          name="fallback_models"
+          control={control}
+          render={({ field }) => (
+            <textarea
+              id="fallback-models"
+              value={field.value}
+              onChange={(e) => field.onChange(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-mono resize-none dark:border-zinc-800 dark:bg-zinc-950"
+              placeholder='["claude-3-opus-20240229", "gpt-4-turbo"]'
+            />
+          )}
+        />
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Supply a JSON array of model names or an object with rich fallback parameters to use when the primary model fails.
         </p>
       </div>
 
