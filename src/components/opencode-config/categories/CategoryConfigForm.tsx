@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { AgentModelSelector } from '../AgentModelSelector';
@@ -25,6 +25,9 @@ interface CategoryConfigFormData {
   temperature: number;
   top_p: number;
   prompt_append: string;
+  reasoningEffort: string;
+  fallbackModelsObj?: unknown;
+  fallback_models: string;
 }
 
 interface CategoryConfigFormProps {
@@ -59,7 +62,6 @@ export function CategoryConfigForm({
   const {
     control,
     handleSubmit,
-    watch,
     formState: { isSubmitting },
   } = useForm<CategoryConfigFormData>({
     defaultValues: {
@@ -68,6 +70,11 @@ export function CategoryConfigForm({
       temperature: initialConfig?.temperature ?? 0.7,
       top_p: initialConfig?.top_p ?? 1,
       prompt_append: initialConfig?.prompt_append || '',
+      reasoningEffort: initialConfig?.reasoningEffort || '',
+      fallbackModelsObj: initialConfig?.fallback_models,
+      fallback_models: initialConfig?.fallback_models
+        ? JSON.stringify(initialConfig.fallback_models, null, 2)
+        : '',
     },
   });
 
@@ -109,7 +116,7 @@ export function CategoryConfigForm({
     [modelsData]
   );
 
-  const watchedModel = watch('model');
+  const watchedModel = useWatch({ control, name: 'model' });
   const isModelInvalid = watchedModel && availableModels.size > 0 && !availableModels.has(watchedModel);
   const isModelMissing = !watchedModel;
   const fallbackChain = CATEGORY_FALLBACK_CHAINS[categoryName];
@@ -125,15 +132,35 @@ export function CategoryConfigForm({
     const temperature = Math.max(0, Math.min(2, data.temperature));
     const top_p = Math.max(0, Math.min(1, data.top_p));
 
-    const config: CategoryConfig = {
+    let parsedFallback = undefined;
+    if (data.fallback_models.trim() !== '') {
+      try {
+        parsedFallback = JSON.parse(data.fallback_models);
+      } catch {
+        setToast({ type: 'error', message: 'Invalid JSON in fallback_models' });
+        return;
+      }
+    }
+
+    type CategoryConfigPayload = Omit<CategoryConfig, 'reasoningEffort' | 'fallback_models'> & {
+      reasoningEffort?: CategoryConfig['reasoningEffort'] | null;
+      fallback_models?: CategoryConfig['fallback_models'] | null;
+    };
+
+    const config: CategoryConfigPayload = {
       model: data.model || undefined,
       variant: data.variant || undefined,
       temperature,
       top_p,
       prompt_append: data.prompt_append || undefined,
     };
+    if (data.reasoningEffort) config.reasoningEffort = data.reasoningEffort as CategoryConfig['reasoningEffort'];
+    else config.reasoningEffort = null;
+    
+    if (parsedFallback !== undefined) config.fallback_models = parsedFallback;
+    else config.fallback_models = null;
 
-    onSave(config);
+    onSave(config as CategoryConfig);
     setToast({ type: 'success', message: 'Configuration saved successfully' });
   };
 
@@ -264,6 +291,33 @@ export function CategoryConfigForm({
         />
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Model reasoning variant. Higher values mean more thinking.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="reasoning-effort-selector" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          Reasoning Effort
+        </label>
+        <Controller
+          name="reasoningEffort"
+          control={control}
+          render={({ field }) => (
+            <select
+              id="reasoning-effort-selector"
+              value={field.value}
+              onChange={(e) => field.onChange(e.target.value)}
+              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+            >
+              <option value="">Not set</option>
+              <option value="high">high</option>
+              <option value="medium">medium</option>
+              <option value="low">low</option>
+              <option value="max">max</option>
+            </select>
+          )}
+        />
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Controls the reasoning effort for compatible models like o1 or o3-mini.
         </p>
       </div>
 
@@ -424,6 +478,29 @@ export function CategoryConfigForm({
         />
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Additional instructions appended to the system prompt.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="fallback-models" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          Fallback Models (JSON)
+        </label>
+        <Controller
+          name="fallback_models"
+          control={control}
+          render={({ field }) => (
+            <textarea
+              id="fallback-models"
+              value={field.value}
+              onChange={(e) => field.onChange(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-mono resize-none dark:border-zinc-800 dark:bg-zinc-950"
+              placeholder='["claude-3-opus-20240229", "gpt-4-turbo"]'
+            />
+          )}
+        />
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Supply a JSON array of model names or an object with rich fallback parameters to use when the primary model fails.
         </p>
       </div>
 
