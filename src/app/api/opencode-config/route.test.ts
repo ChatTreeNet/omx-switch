@@ -15,6 +15,72 @@ import { GET, POST } from './route';
 const mockReadConfig = vi.mocked(readConfig);
 const mockWriteConfig = vi.mocked(writeConfig);
 
+const richV4Config = {
+  $schema: 'https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/master/assets/oh-my-openagent.schema.json',
+  team_mode: {
+    enabled: true,
+    workspace: 'team-alpha',
+    future_policy: { approval: 'required' },
+  },
+  agents: {
+    sisyphus: {
+      model: 'anthropic/claude-opus-4-6',
+      variant: 'max',
+      reasoningEffort: 'max',
+      temperature: 0.2,
+      top_p: 0.9,
+      maxTokens: 64000,
+      thinking: { type: 'enabled', budget_tokens: 12000 },
+      fallback_models: [
+        'openai/gpt-5.4',
+        {
+          model: 'google/gemini-3.1-pro',
+          variant: 'high',
+          reasoningEffort: 'max',
+          maxTokens: 32000,
+          thinking: { enabled: true },
+          futureFallbackField: 'preserve-me',
+        },
+      ],
+      future_agent_knob: { mode: 'experimental' },
+      apiKey: 'sk-should-not-leak',
+      nested: {
+        access_token: 'nested-token-should-not-leak',
+        safe_hint: 'keep-me',
+      },
+    },
+  },
+  categories: {
+    ultrabrain: {
+      model: 'openai/gpt-5.4',
+      variant: 'xhigh',
+      reasoningEffort: 'max',
+      maxTokens: 48000,
+      thinking: { enabled: true },
+      fallback_models: [
+        'anthropic/claude-opus-4-6',
+        { model: 'google/gemini-3.1-pro', reasoningEffort: 'max', maxTokens: 32000 },
+      ],
+      future_category_knob: 'keep-me',
+      password: 'category-secret-should-not-leak',
+    },
+  },
+  vibepulse: {
+    stickyBusyDelayMs: 25000,
+    futureVibePulseField: { enabled: true },
+    token: 'vibepulse-token-should-not-leak',
+  },
+  future_top_level: { enabled: true },
+};
+
+function createPostRequest(body: Record<string, unknown>) {
+  return new Request('http://localhost/api/opencode-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }) as never;
+}
+
 describe('/api/opencode-config', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -82,5 +148,284 @@ describe('/api/opencode-config', () => {
         openEditorTargetMode: 'hub',
       },
     }));
+  });
+
+  it('returns safe v4-compatible config while filtering secret-like fields', async () => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.team_mode).toEqual(richV4Config.team_mode);
+    expect(data.agents.sisyphus).toEqual({
+      model: 'anthropic/claude-opus-4-6',
+      variant: 'max',
+      reasoningEffort: 'max',
+      temperature: 0.2,
+      top_p: 0.9,
+      maxTokens: 64000,
+      thinking: { type: 'enabled', budget_tokens: 12000 },
+      fallback_models: [
+        'openai/gpt-5.4',
+        expect.objectContaining({
+          model: 'google/gemini-3.1-pro',
+          reasoningEffort: 'max',
+          futureFallbackField: 'preserve-me',
+        }),
+      ],
+      future_agent_knob: { mode: 'experimental' },
+      nested: { safe_hint: 'keep-me' },
+    });
+    expect(data.categories.ultrabrain).toEqual(expect.objectContaining({
+      reasoningEffort: 'max',
+      maxTokens: 48000,
+      thinking: { enabled: true },
+      future_category_knob: 'keep-me',
+    }));
+    expect(data.vibepulse).toEqual({
+      stickyBusyDelayMs: 25000,
+      futureVibePulseField: { enabled: true },
+      openEditorTargetMode: 'remote',
+    });
+    expect(JSON.stringify(data)).not.toContain('should-not-leak');
+  });
+
+  it('preserves v4 fields when updating one known agent field', async () => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const response = await POST(createPostRequest({
+      agents: {
+        sisyphus: {
+          temperature: 0.4,
+          reasoningEffort: 'high',
+        },
+      },
+    }));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.agents.sisyphus.temperature).toBe(0.4);
+    expect(data.agents.sisyphus.reasoningEffort).toBe('high');
+    expect(data.team_mode).toEqual(richV4Config.team_mode);
+    expect(mockWriteConfig).toHaveBeenCalledWith(expect.objectContaining({
+      team_mode: richV4Config.team_mode,
+      future_top_level: { enabled: true },
+      agents: expect.objectContaining({
+        sisyphus: expect.objectContaining({
+          reasoningEffort: 'high',
+          fallback_models: richV4Config.agents.sisyphus.fallback_models,
+          maxTokens: 64000,
+          thinking: { type: 'enabled', budget_tokens: 12000 },
+          future_agent_knob: { mode: 'experimental' },
+        }),
+      }),
+    }));
+  });
+
+  it('round-trips v4 config fields through GET, POST write, and GET readback', async () => {
+    mockReadConfig.mockResolvedValueOnce(richV4Config);
+
+    const initialGetResponse = await GET();
+    const initialGetData = await initialGetResponse.json();
+
+    expect(initialGetResponse.status).toBe(200);
+    expect(initialGetData.team_mode.enabled).toBe(true);
+    expect(initialGetData.future_top_level).toEqual({ enabled: true });
+    expect(initialGetData.agents.sisyphus.reasoningEffort).toBe('max');
+    expect(initialGetData.agents.sisyphus.fallback_models).toEqual([
+      'openai/gpt-5.4',
+      expect.objectContaining({
+        model: 'google/gemini-3.1-pro',
+        reasoningEffort: 'max',
+        maxTokens: 32000,
+        thinking: { enabled: true },
+        futureFallbackField: 'preserve-me',
+      }),
+    ]);
+    expect(JSON.stringify(initialGetData)).not.toContain('should-not-leak');
+
+    mockReadConfig.mockResolvedValueOnce(richV4Config);
+    mockWriteConfig.mockResolvedValueOnce();
+
+    const postResponse = await POST(createPostRequest({
+      ...initialGetData,
+      agents: {
+        ...initialGetData.agents,
+        sisyphus: {
+          ...initialGetData.agents.sisyphus,
+          temperature: 0.35,
+        },
+      },
+    }));
+    const postData = await postResponse.json();
+
+    expect(postResponse.status).toBe(200);
+    expect(postData.team_mode).toEqual(initialGetData.team_mode);
+    expect(postData.future_top_level).toEqual({ enabled: true });
+    expect(postData.agents.sisyphus).toEqual(expect.objectContaining({
+      reasoningEffort: 'max',
+      maxTokens: 64000,
+      thinking: { type: 'enabled', budget_tokens: 12000 },
+      temperature: 0.35,
+      future_agent_knob: { mode: 'experimental' },
+    }));
+
+    const writtenConfig = mockWriteConfig.mock.calls[0][0];
+    expect(writtenConfig).toEqual(expect.objectContaining({
+      team_mode: expect.objectContaining({
+        enabled: true,
+        future_policy: { approval: 'required' },
+      }),
+      future_top_level: { enabled: true },
+      agents: expect.objectContaining({
+        sisyphus: expect.objectContaining({
+          reasoningEffort: 'max',
+          fallback_models: initialGetData.agents.sisyphus.fallback_models,
+          maxTokens: 64000,
+          thinking: { type: 'enabled', budget_tokens: 12000 },
+        }),
+      }),
+      categories: expect.objectContaining({
+        ultrabrain: expect.objectContaining({
+          reasoningEffort: 'max',
+          fallback_models: initialGetData.categories.ultrabrain.fallback_models,
+          future_category_knob: 'keep-me',
+        }),
+      }),
+    }));
+
+    mockReadConfig.mockResolvedValueOnce(writtenConfig as Awaited<ReturnType<typeof readConfig>>);
+    const readbackResponse = await GET();
+    const readbackData = await readbackResponse.json();
+
+    expect(readbackResponse.status).toBe(200);
+    expect(readbackData.team_mode).toEqual(writtenConfig.team_mode);
+    expect(readbackData.future_top_level).toEqual({ enabled: true });
+    expect(readbackData.agents.sisyphus.fallback_models).toEqual(initialGetData.agents.sisyphus.fallback_models);
+    expect(readbackData.categories.ultrabrain.fallback_models).toEqual(initialGetData.categories.ultrabrain.fallback_models);
+    expect(JSON.stringify(readbackData)).not.toContain('apiKey');
+    expect(JSON.stringify(readbackData)).not.toContain('access_token');
+  });
+
+  it('removes reasoningEffort and fallback_models when explicitly set to null, while preserving unknown safe fields', async () => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const response = await POST(createPostRequest({
+      agents: {
+        sisyphus: {
+          reasoningEffort: null,
+          fallback_models: null
+        }
+      },
+      categories: {
+        ultrabrain: {
+          reasoningEffort: null,
+          fallback_models: null
+        }
+      }
+    }));
+
+    await response.json();
+    expect(response.status).toBe(200);
+
+    const writeCall = mockWriteConfig.mock.calls[0];
+    const writtenConfig = writeCall[0];
+
+    expect(writtenConfig.agents!.sisyphus.reasoningEffort).toBeUndefined();
+    expect(writtenConfig.agents!.sisyphus.fallback_models).toBeUndefined();
+    
+    expect(writtenConfig.categories!.ultrabrain.reasoningEffort).toBeUndefined();
+    expect(writtenConfig.categories!.ultrabrain.fallback_models).toBeUndefined();
+
+    expect(writtenConfig.agents!.sisyphus.future_agent_knob).toBeDefined();
+    expect(writtenConfig.categories!.ultrabrain.future_category_knob).toBeDefined();
+  });
+
+  it('rejects null for non-clearable fields like variant or prompt_append', async () => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const response = await POST(createPostRequest({
+      agents: {
+        sisyphus: {
+          variant: null,
+          prompt_append: null
+        },
+      },
+    }));
+
+    const data = await response.json();
+    expect(response.status).toBe(400);
+    expect(data.error).toContain('variant must be a string');
+    
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
+  it('strips existing disk secrets from safe POST write payloads while preserving safe unknown fields', async () => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const response = await POST(createPostRequest({
+      agents: {
+        sisyphus: {
+          temperature: 0.4,
+        },
+      },
+    }));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.agents.sisyphus).toEqual(expect.objectContaining({
+      temperature: 0.4,
+      future_agent_knob: { mode: 'experimental' },
+      nested: { safe_hint: 'keep-me' },
+    }));
+
+    const writtenConfig = mockWriteConfig.mock.calls[0][0];
+    expect(writtenConfig).toEqual(expect.objectContaining({
+      team_mode: richV4Config.team_mode,
+      future_top_level: { enabled: true },
+      agents: expect.objectContaining({
+        sisyphus: expect.objectContaining({
+          temperature: 0.4,
+          future_agent_knob: { mode: 'experimental' },
+          nested: { safe_hint: 'keep-me' },
+          fallback_models: richV4Config.agents.sisyphus.fallback_models,
+        }),
+      }),
+      categories: expect.objectContaining({
+        ultrabrain: expect.objectContaining({
+          future_category_knob: 'keep-me',
+        }),
+      }),
+      vibepulse: expect.objectContaining({
+        futureVibePulseField: { enabled: true },
+      }),
+    }));
+    expect(JSON.stringify(writtenConfig)).not.toContain('should-not-leak');
+    expect(JSON.stringify(writtenConfig)).not.toContain('apiKey');
+    expect(JSON.stringify(writtenConfig)).not.toContain('access_token');
+    expect(JSON.stringify(writtenConfig)).not.toContain('password');
+    expect(writtenConfig.vibepulse).not.toHaveProperty('token');
+  });
+
+  it.each([
+    ['apiKey', { agents: { sisyphus: { apiKey: 'sk-test' } } }],
+    ['token', { vibepulse: { token: 'secret-token' } }],
+    ['password', { categories: { ultrabrain: { password: 'secret-password' } } }],
+    ['nested secret-like keys', { agents: { sisyphus: { thinking: { access_token: 'nested-token' } } } }],
+  ])('rejects secret-like POST field %s without writing config', async (_name, payload) => {
+    mockReadConfig.mockResolvedValue(richV4Config);
+    mockWriteConfig.mockResolvedValue();
+
+    const response = await POST(createPostRequest(payload));
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.error).toContain('disallowed');
+    expect(mockWriteConfig).not.toHaveBeenCalled();
   });
 });
