@@ -23,6 +23,7 @@ function normalizeConfig(value: unknown): ProfileConfig {
   }
 
   return {
+    ...value,
     agents: isRecord(value.agents) ? (value.agents as ProfileConfig['agents']) : {},
     categories: isRecord(value.categories)
       ? (value.categories as NonNullable<ProfileConfig['categories']>)

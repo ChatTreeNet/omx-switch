@@ -4,7 +4,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { parse, stringify } from 'comment-json';
 import { OH_MY_OPENAGENT_CONFIG_SCHEMA } from '../opencodeConfig';
-import type { AgentConfig, CategoryConfig } from '@/types/opencodeConfig';
+import type { AgentConfig, CategoryConfig, ProfileConfig as SharedProfileConfig } from '@/types/opencodeConfig';
 
 export const PROFILES_DIR = join(homedir(), '.config', 'opencode', 'profiles');
 export const PROFILE_INDEX_PATH = join(PROFILES_DIR, 'index.json');
@@ -27,10 +27,10 @@ export interface ProfileIndex {
   lastModified: string;
 }
 
-export interface ProfileConfig {
-  $schema?: string;
-  agents: Record<string, AgentConfig>;
-  categories?: Record<string, CategoryConfig>;
+export type ProfileConfig = SharedProfileConfig;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 const BUILTIN_PROFILES: Profile[] = [
@@ -161,21 +161,21 @@ function getProfileConfigPath(id: string): string {
 }
 
 function normalizeProfileConfig(config: unknown): ProfileConfig {
-  if (!config || typeof config !== 'object') {
+  if (!isRecord(config)) {
     return {
       $schema: OH_MY_OPENAGENT_CONFIG_SCHEMA,
       agents: {},
     };
   }
 
-  const candidate = config as Record<string, unknown>;
+  const candidate = config;
   const agents =
-    candidate.agents && typeof candidate.agents === 'object'
+    isRecord(candidate.agents)
       ? (candidate.agents as Record<string, AgentConfig>)
       : {};
 
   const categories =
-    candidate.categories && typeof candidate.categories === 'object'
+    isRecord(candidate.categories)
       ? (candidate.categories as Record<string, CategoryConfig>)
       : undefined;
 
@@ -185,6 +185,7 @@ function normalizeProfileConfig(config: unknown): ProfileConfig {
       : OH_MY_OPENAGENT_CONFIG_SCHEMA;
 
   return {
+    ...candidate,
     $schema: schema,
     agents,
     categories,

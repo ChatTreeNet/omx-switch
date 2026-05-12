@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { parse } from 'comment-json';
 
-const SCHEMA_URL = 'https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/v3.15.2/assets/oh-my-opencode.schema.json';
+const SCHEMA_URL = 'https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/master/assets/oh-my-openagent.schema.json';
 
 describe('profile storage schema handling', () => {
   let testHomeDir: string;
@@ -69,6 +69,82 @@ describe('profile storage schema handling', () => {
     expect(loaded).toEqual({
       $schema: SCHEMA_URL,
       agents: {},
+    });
+  });
+
+  it('preserves v4 overlay fields and unknown metadata when reading and writing profile config', async () => {
+    await storage.writeProfileConfig('v4-overlay', {
+      agents: {
+        sisyphus: {
+          model: 'openai/gpt-5.4',
+          reasoningEffort: 'max',
+          maxTokens: 64000,
+          thinking: { type: 'enabled', budget_tokens: 12000 },
+          future_agent_knob: { mode: 'experimental' },
+          fallback_models: [
+            'anthropic/claude-opus-4-6',
+            {
+              model: 'google/gemini-3.1-pro',
+              variant: 'high',
+              reasoningEffort: 'max',
+              maxTokens: 32000,
+              thinking: { budget_tokens: 2048 },
+              futureFallbackField: 'preserve-me',
+            },
+          ],
+        },
+      },
+      categories: {
+        ultrabrain: {
+          reasoningEffort: 'max',
+          fallback_models: [
+            'openai/gpt-5.4',
+            { model: 'anthropic/claude-opus-4-6', reasoningEffort: 'max', thinking: { enabled: true } },
+          ],
+          future_category_knob: 'keep-me',
+        },
+      },
+      team_mode: {
+        enabled: true,
+        strategy: 'pairing',
+      },
+      metadata: {
+        owner: 'platform',
+      },
+    });
+
+    const loaded = await storage.readProfileConfig('v4-overlay');
+
+    expect(loaded.$schema).toBe(SCHEMA_URL);
+    expect(loaded.agents.sisyphus.reasoningEffort).toBe('max');
+    expect(loaded.agents.sisyphus.maxTokens).toBe(64000);
+    expect(loaded.agents.sisyphus.thinking).toEqual({ type: 'enabled', budget_tokens: 12000 });
+    expect(loaded.agents.sisyphus.future_agent_knob).toEqual({ mode: 'experimental' });
+    expect(loaded.agents.sisyphus.fallback_models).toEqual([
+      'anthropic/claude-opus-4-6',
+      {
+        model: 'google/gemini-3.1-pro',
+        variant: 'high',
+        reasoningEffort: 'max',
+        maxTokens: 32000,
+        thinking: { budget_tokens: 2048 },
+        futureFallbackField: 'preserve-me',
+      },
+    ]);
+    expect(loaded.categories?.ultrabrain).toEqual({
+      reasoningEffort: 'max',
+      fallback_models: [
+        'openai/gpt-5.4',
+        { model: 'anthropic/claude-opus-4-6', reasoningEffort: 'max', thinking: { enabled: true } },
+      ],
+      future_category_knob: 'keep-me',
+    });
+    expect(loaded.team_mode).toEqual({
+      enabled: true,
+      strategy: 'pairing',
+    });
+    expect(loaded.metadata).toEqual({
+      owner: 'platform',
     });
   });
 
