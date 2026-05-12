@@ -18,10 +18,8 @@ import type {
   SessionSource,
   SourceResultMeta,
 } from '@/lib/session-providers/types';
-import {
-  clearSessionForceUnarchived,
-} from '@/lib/sessionArchiveOverrides';
-import { composeSourceKey, parseSourceKey } from '@/lib/hostIdentity';
+
+import { parseSourceKey } from '@/lib/hostIdentity';
 import { createNodeRequestHeaders, NODE_PROTOCOL_VERSION } from '@/lib/nodeProtocol';
 import { composeProviderSourceKey, detectProviderFromRawId, extractProviderRawId } from '@/lib/session-providers/providerIds';
 import { listNodeRecords, type StoredNodeRecord } from '@/lib/nodeRegistry';
@@ -411,14 +409,6 @@ function toProviderRawSessionId(value: string): string {
   return extractProviderRawId(toRawSessionId(value));
 }
 
-function composeSourceKeySafely(hostId: string, sessionId: string): string | undefined {
-  try {
-    return composeSourceKey(hostId, sessionId);
-  } catch {
-    return undefined;
-  }
-}
-
 function composeProviderSourceKeySafely(
   hostId: string,
   rawId: string,
@@ -562,7 +552,8 @@ function addHostMetadataToPayload(payload: Record<string, unknown>, source: Sess
 }
 
 function toAggregateClaudeChildEntry(session: EnrichedSession): ChildEntry {
-  const { children: _children, ...childEntry } = session;
+  const childEntry = { ...session };
+  delete (childEntry as { children?: unknown }).children;
   return childEntry as ChildEntry;
 }
 
