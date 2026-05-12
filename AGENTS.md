@@ -8,6 +8,10 @@
 VibePulse is a Next.js App Router dashboard for monitoring OpenCode sessions in real time (SSE + polling), with built-in Oh My OpenAgent profile/config management.
 This repository is dual-purpose: web app runtime, publishable library surface (`src/index.ts`), and npm CLI launcher (`bin/vibepulse.js`).
 
+### Compatibility & Non-Goals
+- **Oh My OpenAgent v4.0.0:** Supports `team_mode.enabled`, rich `fallback_models` (objects), `reasoningEffort: "max"`, `maxTokens`, and `thinking`. Preserves unknown non-secret fields and rejects secret-like keys (e.g., `api*`, `*token*`, `*secret*`, `*password*`). Full `team_mode` / `hyperplan` product UX is a non-goal.
+- **OpenCode:** Targets `@opencode-ai/sdk@1.14.48`. Full SDK v2 rewrite is a non-goal.
+
 ## STRUCTURE
 ```text
 VibePulse/
