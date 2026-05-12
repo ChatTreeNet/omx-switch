@@ -381,7 +381,7 @@ describe('/api/opencode-config', () => {
     expect(mockWriteConfig).not.toHaveBeenCalled();
   });
 
-  it('strips existing disk secrets from safe POST write payloads while preserving safe unknown fields', async () => {
+  it('preserves existing disk secrets in safe POST writes while redacting the response', async () => {
     mockReadConfig.mockResolvedValue(richV4Config);
     mockWriteConfig.mockResolvedValue();
 
@@ -399,7 +399,13 @@ describe('/api/opencode-config', () => {
       temperature: 0.4,
       future_agent_knob: { mode: 'experimental' },
       nested: { safe_hint: 'keep-me' },
+      fallback_models: richV4Config.agents.sisyphus.fallback_models,
     }));
+    expect(JSON.stringify(data)).not.toContain('should-not-leak');
+    expect(JSON.stringify(data)).not.toContain('apiKey');
+    expect(JSON.stringify(data)).not.toContain('access_token');
+    expect(JSON.stringify(data)).not.toContain('password');
+    expect(data.vibepulse).not.toHaveProperty('token');
 
     const writtenConfig = mockWriteConfig.mock.calls[0][0];
     expect(writtenConfig).toEqual(expect.objectContaining({
@@ -408,25 +414,26 @@ describe('/api/opencode-config', () => {
       agents: expect.objectContaining({
         sisyphus: expect.objectContaining({
           temperature: 0.4,
+          apiKey: 'sk-should-not-leak',
           future_agent_knob: { mode: 'experimental' },
-          nested: { safe_hint: 'keep-me' },
+          nested: expect.objectContaining({
+            access_token: 'nested-token-should-not-leak',
+            safe_hint: 'keep-me',
+          }),
           fallback_models: richV4Config.agents.sisyphus.fallback_models,
         }),
       }),
       categories: expect.objectContaining({
         ultrabrain: expect.objectContaining({
           future_category_knob: 'keep-me',
+          password: 'category-secret-should-not-leak',
         }),
       }),
       vibepulse: expect.objectContaining({
         futureVibePulseField: { enabled: true },
+        token: 'vibepulse-token-should-not-leak',
       }),
     }));
-    expect(JSON.stringify(writtenConfig)).not.toContain('should-not-leak');
-    expect(JSON.stringify(writtenConfig)).not.toContain('apiKey');
-    expect(JSON.stringify(writtenConfig)).not.toContain('access_token');
-    expect(JSON.stringify(writtenConfig)).not.toContain('password');
-    expect(writtenConfig.vibepulse).not.toHaveProperty('token');
   });
 
   it.each([

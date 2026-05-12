@@ -338,7 +338,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Read current config
-    const currentConfig = stripSecretLikeFields(await readConfig()) as Awaited<ReturnType<typeof readConfig>>;
+    const currentConfig = await readConfig();
     const currentAgents = currentConfig.agents || {};
 
     // Validate and merge agent updates
@@ -473,14 +473,16 @@ export async function POST(request: NextRequest) {
      }
    );
 
+  const safeResponse = stripSecretLikeFields(newConfig) as Record<string, unknown>;
+
   return NextResponse.json(
     {
-      ...newConfig,
+      ...safeResponse,
       success: true,
-      agents: newConfig.agents,
-      categories: newConfig.categories,
-      team_mode: newConfig.team_mode,
-      vibepulse: newConfig.vibepulse,
+      agents: safeResponse.agents,
+      categories: safeResponse.categories,
+      team_mode: safeResponse.team_mode,
+      vibepulse: safeResponse.vibepulse,
     },
     { status: 200 }
   );
