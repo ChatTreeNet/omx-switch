@@ -145,47 +145,6 @@ describe('useHostSources', () => {
     return { getCurrentValue, rerenderRuntimeRole };
   }
 
-  function renderPairedUseHostSources() {
-    let firstValue: ReturnType<typeof useHostSources> | null = null;
-    let secondValue: ReturnType<typeof useHostSources> | null = null;
-    const render = getRender();
-
-    render(createElement(
-      QueryClientProvider,
-      { client: queryClient },
-      createElement('div', null,
-        createElement(HookProbe, {
-          onChange: (value) => {
-            firstValue = value;
-          },
-        }),
-        createElement(HookProbe, {
-          onChange: (value) => {
-            secondValue = value;
-          },
-        })
-      )
-    ));
-
-    const getFirstValue = () => {
-      if (!firstValue) {
-        throw new Error('First hook value not ready');
-      }
-
-      return firstValue;
-    };
-
-    const getSecondValue = () => {
-      if (!secondValue) {
-        throw new Error('Second hook value not ready');
-      }
-
-      return secondValue;
-    };
-
-    return { getFirstValue, getSecondValue };
-  }
-
   it('always includes Local first', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

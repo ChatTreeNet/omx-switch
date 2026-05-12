@@ -23,7 +23,7 @@ try {
             }
           }
         }
-      } catch (e) {
+      } catch {
         console.log('Could not parse response as JSON');
       }
     }
