@@ -1,6 +1,6 @@
-import { createOpencodeClient } from '@opencode-ai/sdk';
 import { discoverOpencodePortsWithMeta } from '@/lib/opencodeDiscovery';
 import { parseSourceKey } from '@/lib/hostIdentity';
+import { createVibePulseOpencodeClient, getOpencodeSession } from '@/lib/session-providers/opencodeSdkCompat';
 
 function resolveLocalSessionId(id: string): string | null {
     if (!id.includes(':')) {
@@ -51,8 +51,8 @@ export async function GET(
     try {
         for (const port of ports) {
             try {
-                const client = createOpencodeClient({ baseUrl: `http://localhost:${port}` });
-                const result = await client.session.get({ path: { id: sessionId } });
+                const client = createVibePulseOpencodeClient(`http://localhost:${port}`);
+                const result = await getOpencodeSession(client, sessionId);
                 if (result.data) {
                     return Response.json({ session: result.data });
                 }
