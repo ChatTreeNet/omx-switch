@@ -23,6 +23,11 @@ VibePulse includes experimental, capability-aware support for tracking local [Cl
 - **Polling Integration:** Claude status updates via polling only locally and remotely. Live SSE streams and real-time event parity are not supported.
 - **Artifact-Backed Child Topology:** Child sessions are exposed only when verified by authoritative artifact-backed linkage. No transcript rendering is supported.
 
+## Compatibility
+
+- **Oh My OpenAgent v4.0.0:** VibePulse supports config discovery and persistence for Oh My OpenAgent v4.0.0. It preserves unknown non-secret fields and defensively rejects or strips secret-like keys from API payloads. Supported v4 fields include `team_mode.enabled`, rich `fallback_models` (objects), `reasoningEffort`, `maxTokens`, and `thinking`. Features like a full product UX for `team_mode` or the `hyperplan` command workflow are explicitly **non-goals**.
+- **OpenCode:** VibePulse is compatible with `@opencode-ai/sdk@1.14.48`. Note that an SDK v2 rewrite is currently a **non-goal**.
+
 ## Quick Start
 
 ### Hub Mode (Default)

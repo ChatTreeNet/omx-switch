@@ -1,4 +1,3 @@
-import { createOpencodeClient } from '@opencode-ai/sdk';
 import { discoverOpencodePortsWithMeta } from '@/lib/opencodeDiscovery';
 import {
   NODE_PROTOCOL_VERSION,
@@ -6,6 +5,7 @@ import {
   guardNodeRequest,
   toNodeRequestGuardResponse,
 } from '@/lib/nodeProtocol';
+import { createVibePulseOpencodeClient, streamOpencodeGlobalEvents } from '@/lib/session-providers/opencodeSdkCompat';
 
 const DEFAULT_EVENTS_PREFLIGHT_TIMEOUT_MS = 2500;
 
@@ -50,7 +50,7 @@ async function connectEventStreamWithTimeout(
   controller?: AbortController
 ): Promise<ConnectedStream> {
   const connectionController = controller ?? new AbortController();
-  const client = createOpencodeClient({ baseUrl: `http://localhost:${port}` });
+  const client = createVibePulseOpencodeClient(`http://localhost:${port}`);
 
   let timerId: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -62,7 +62,7 @@ async function connectEventStreamWithTimeout(
 
   try {
     const connection = await Promise.race([
-      client.global.event({ signal: connectionController.signal }),
+      streamOpencodeGlobalEvents(client, connectionController.signal),
       timeoutPromise,
     ]);
     return {

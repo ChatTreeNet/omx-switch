@@ -1,4 +1,3 @@
-import { createOpencodeClient } from '@opencode-ai/sdk';
 import { execSync } from 'child_process';
 import path from 'path';
 import {
@@ -26,6 +25,14 @@ import type {
   SessionsRouteResult,
   StableRealtimeStatus,
 } from './types';
+import {
+  createVibePulseOpencodeClient,
+  formatOpencodeSdkError,
+  getOpencodeSessionMessages,
+  getOpencodeSessionStatus,
+  listOpencodeSessions,
+  type OpencodeSdkClient,
+} from './opencodeSdkCompat';
 
 const CHILD_ACTIVE_WINDOW_MS = 30 * 60 * 1000;
 const CHILD_UNKNOWN_STATE_BUSY_WINDOW_MS = 2 * 60 * 1000;
@@ -109,17 +116,12 @@ function collectPartStatuses(messages: Array<{ parts?: MessagePart[] }>): Messag
 }
 
 async function fetchPartStatuses(
-  client: ReturnType<typeof createOpencodeClient>,
+  client: OpencodeSdkClient,
   sessionId: string,
   timeoutMs: number
 ): Promise<MessageStateStatus[]> {
   const messagesResult = await withTimeout(
-    (signal) =>
-      client.session.messages({
-        path: { id: sessionId },
-        query: { limit: 8 },
-        signal,
-      }),
+    (signal) => getOpencodeSessionMessages(client, sessionId, 8, signal),
     timeoutMs,
     `session.messages(${sessionId})`
   );
@@ -202,10 +204,6 @@ function sortChildEntries(children: ChildEntry[]): void {
   });
 }
 
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export const opencodeLocalSessionProvider: LocalSessionProvider = {
   id: 'opencode',
   async getSessionsResult({ stickyBusyDelayMs }): Promise<SessionsRouteResult> {
@@ -273,14 +271,14 @@ export const opencodeLocalSessionProvider: LocalSessionProvider = {
 
     try {
       const results = await Promise.allSettled(ports.map(async (port) => {
-        const client = createOpencodeClient({ baseUrl: `http://localhost:${port}` });
+        const client = createVibePulseOpencodeClient(`http://localhost:${port}`);
         const sessionsResult = await withTimeout(
-          (signal) => client.session.list({ signal }),
+          (signal) => listOpencodeSessions(client, signal),
           sessionListTimeoutMs,
           `session.list(${port})`
         );
         const statusResult = await withTimeout(
-          (signal) => client.session.status({ signal }),
+          (signal) => getOpencodeSessionStatus(client, signal),
           sessionStatusTimeoutMs,
           `session.status(${port})`
         ).catch(() => ({ data: {} }));
@@ -289,7 +287,7 @@ export const opencodeLocalSessionProvider: LocalSessionProvider = {
 
       const allSessions: SessionLike[] = [];
       const statusMap: Record<string, { type: StableRealtimeStatus }> = {};
-      const clientByPort: Record<number, ReturnType<typeof createOpencodeClient>> = {};
+      const clientByPort: Record<number, OpencodeSdkClient> = {};
       const sessionPortMap: Record<string, number> = {};
       const failedPorts: Array<{ port: number; reason: string }> = [];
 
@@ -299,7 +297,7 @@ export const opencodeLocalSessionProvider: LocalSessionProvider = {
         if (result.status !== 'fulfilled') {
           failedPorts.push({
             port,
-            reason: result.reason instanceof Error ? result.reason.message : String(result.reason),
+            reason: formatOpencodeSdkError(result.reason),
           });
           continue;
         }

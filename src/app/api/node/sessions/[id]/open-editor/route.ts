@@ -1,4 +1,3 @@
-import { createOpencodeClient } from '@opencode-ai/sdk';
 import { discoverOpencodePortsWithMeta } from '@/lib/opencodeDiscovery';
 import type { OpenEditorTool } from '@/lib/editorLauncher';
 import { openEditorOnCurrentMachine } from '@/lib/editorLauncher.server';
@@ -7,6 +6,7 @@ import {
   guardNodeRequest,
   toNodeRequestGuardResponse,
 } from '@/lib/nodeProtocol';
+import { createVibePulseOpencodeClient, formatOpencodeSdkError, getOpencodeSession } from '@/lib/session-providers/opencodeSdkCompat';
 
 function resolveNodeLocalSessionId(id: string): string | null {
   const trimmedId = id.trim();
@@ -65,8 +65,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   for (const port of ports) {
     try {
-      const client = createOpencodeClient({ baseUrl: `http://localhost:${port}` });
-      const result = await client.session.get({ path: { id: sessionId } });
+      const client = createVibePulseOpencodeClient(`http://localhost:${port}`);
+      const result = await getOpencodeSession(client, sessionId);
       const directory = result.data?.directory;
 
       if (typeof directory !== 'string' || !directory.trim()) {
@@ -104,8 +104,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   if (errors.length > 0) {
-    const lastErrorMessage = errors[errors.length - 1]?.message;
-    if (errors.every((error) => /not found|404/i.test(error.message))) {
+    const lastError = errors[errors.length - 1];
+    const lastErrorMessage = lastError ? formatOpencodeSdkError(lastError) : undefined;
+    if (errors.every((error) => /not found|404/i.test(formatOpencodeSdkError(error)))) {
       return Response.json({ error: 'Session not found', reason: 'session_not_found' }, { status: 404 });
     }
 

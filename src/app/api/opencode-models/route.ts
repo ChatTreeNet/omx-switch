@@ -41,7 +41,10 @@ export function handleExecResult(
   }
 
   try {
-    const models = stdout.trim().split('\n').filter(line => line.includes('/'));
+    const models = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.includes('/'));
     if (models.length === 0) {
       return { models: [], source: 'error', error: 'No models found. Please check your OpenCode installation.' };
     }

@@ -1,7 +1,7 @@
 import { ActionSessionReference, parseActionSessionReference } from '@/lib/hostIdentity';
 import { listNodeRecords } from '@/lib/nodeRegistry';
 import { createNodeRequestHeaders } from '@/lib/nodeProtocol';
-import { detectProviderFromRawId, extractProviderRawId, getDefaultProviderContext } from '@/lib/session-providers/providerIds';
+import { detectProviderFromRawId, getDefaultProviderContext } from '@/lib/session-providers/providerIds';
 
 const REMOTE_NODE_ACTION_TIMEOUT_MS = 5_000;
 

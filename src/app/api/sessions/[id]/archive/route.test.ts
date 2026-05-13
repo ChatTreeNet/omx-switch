@@ -46,6 +46,31 @@ describe('/api/sessions/[id]/archive', () => {
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:7777/session/abc', expect.objectContaining({ method: 'PATCH' }));
   });
 
+  it('archives on the next discovered OpenCode port when the first port fails', async () => {
+    mockDiscoverPortsWithMeta.mockReturnValue({ ports: [7777, 7778], timedOut: false });
+    const mockFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === 'http://localhost:7777/session/abc') {
+        throw new Error('port 7777 offline');
+      }
+
+      if (url === 'http://localhost:7778/session/abc') {
+        return new Response('', { status: 200 });
+      }
+
+      throw new Error(`Unexpected archive URL: ${url}`);
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const response = await POST(new Request('http://localhost/api/sessions/local:abc/archive', { method: 'POST' }), {
+      params: Promise.resolve({ id: 'local:abc' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:7777/session/abc', expect.objectContaining({ method: 'PATCH' }));
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:7778/session/abc', expect.objectContaining({ method: 'PATCH' }));
+  });
+
   it('treats UUID-like local ids without claude namespace as opencode sessions', async () => {
     const opencodeUuid = '550e8400-e29b-41d4-a716-446655440000';
     const mockFetch = vi.fn(async () => new Response(JSON.stringify({ error: 'missing' }), { status: 404 }));

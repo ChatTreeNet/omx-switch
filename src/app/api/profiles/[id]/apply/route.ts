@@ -4,7 +4,7 @@ import {
   getProfileById,
   setActiveProfileId,
 } from '@/lib/profiles/storage';
-import { readConfig, writeConfig } from '@/lib/opencodeConfig';
+import { mergeConfig, readConfig, writeConfig } from '@/lib/opencodeConfig';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -24,15 +24,19 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
 
     const profileConfig = await readProfileConfig(id);
     const currentConfig = await readConfig();
+    const mergedConfig = mergeConfig(currentConfig, profileConfig);
+    let configWasWritten = false;
 
-    const mergedConfig = {
-      ...currentConfig,
-      agents: profileConfig.agents,
-      categories: profileConfig.categories,
-    };
-
-    await writeConfig(mergedConfig);
-    await setActiveProfileId(id);
+    try {
+      await writeConfig(mergedConfig);
+      configWasWritten = true;
+      await setActiveProfileId(id);
+    } catch (error) {
+      if (configWasWritten) {
+        await writeConfig(currentConfig);
+      }
+      throw error;
+    }
 
     return NextResponse.json({
       message: 'Profile applied successfully',

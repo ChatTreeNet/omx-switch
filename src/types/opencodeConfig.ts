@@ -1,3 +1,33 @@
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'max' | (string & {});
+
+export type ThinkingConfig = boolean | Record<string, unknown>;
+
+export interface FallbackModelObject {
+  /** Model identifier (e.g., 'anthropic/claude-opus-4-6') */
+  model?: string;
+  /** Model variant (e.g., 'max', 'high', 'medium', 'low', 'xhigh') */
+  variant?: string;
+  /** Provider reasoning effort, including Oh My OpenAgent v4 'max' */
+  reasoningEffort?: ReasoningEffort;
+  /** Sampling temperature (0-2) */
+  temperature?: number;
+  /** Top-p sampling parameter (0-1) */
+  top_p?: number;
+  /** Maximum tokens per response */
+  maxTokens?: number;
+  /** Provider-specific thinking configuration */
+  thinking?: ThinkingConfig;
+  /** Additional model-specific parameters */
+  [key: string]: unknown;
+}
+
+export type FallbackModelEntry = string | FallbackModelObject;
+
+export interface TeamModeConfig {
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+
 /**
  * Agent configuration - defines how an agent behaves
  * All fields are optional as configuration may be partial
@@ -7,12 +37,22 @@ export interface AgentConfig {
   model?: string;
   /** Model variant (e.g., 'max', 'high', 'medium', 'low', 'xhigh') */
   variant?: string;
+  /** Provider reasoning effort, including Oh My OpenAgent v4 'max' */
+  reasoningEffort?: ReasoningEffort;
   /** Sampling temperature (0-2) */
   temperature?: number;
   /** Top-p sampling parameter (0-1) */
   top_p?: number;
   /** Maximum tokens per response */
   max_tokens?: number;
+  /** Maximum tokens per response (Oh My OpenAgent v4 camelCase form) */
+  maxTokens?: number;
+  /** Provider-specific thinking configuration */
+  thinking?: ThinkingConfig;
+  /** Fallback model or ordered fallback model list */
+  fallback_models?: FallbackModelEntry | FallbackModelEntry[];
+  /** Task category associated with this agent */
+  category?: string;
   /** System prompt override for this agent */
   system?: string;
   /** Additional system prompt to append */
@@ -31,14 +71,24 @@ export interface CategoryConfig {
   model?: string;
   /** Model variant (e.g., 'max', 'high', 'medium', 'low', 'xhigh') */
   variant?: string;
+  /** Provider reasoning effort, including Oh My OpenAgent v4 'max' */
+  reasoningEffort?: ReasoningEffort;
   /** Sampling temperature (0-2) */
   temperature?: number;
   /** Top-p sampling parameter (0-1) */
   top_p?: number;
+  /** Maximum tokens per response */
+  maxTokens?: number;
+  /** Provider-specific thinking configuration */
+  thinking?: ThinkingConfig;
+  /** Fallback model or ordered fallback model list */
+  fallback_models?: FallbackModelEntry | FallbackModelEntry[];
   /** Additional system prompt to append */
   prompt_append?: string;
   /** Human-readable description */
   description?: string;
+  /** Additional category-specific parameters */
+  [key: string]: unknown;
 }
 
 export type OpenEditorTargetMode = 'remote' | 'hub';
@@ -51,12 +101,15 @@ export interface VibePulseConfig {
 }
 
 export interface OhMyOpenAgentConfig {
+  $schema?: string;
   /** Global agent configurations keyed by agent name */
   agents?: Record<string, AgentConfig>;
   /** Category configurations for task type model selection */
   categories?: Record<string, CategoryConfig>;
   /** Default agent configuration to use as base */
   defaultAgent?: AgentConfig;
+  /** Team mode configuration */
+  team_mode?: TeamModeConfig;
   /** Project-specific settings */
   project?: {
     /** Project name */
@@ -100,6 +153,8 @@ export interface ProfileConfig {
   agents: Record<string, AgentConfig>;
   /** Category configurations for task type model selection */
   categories?: Record<string, CategoryConfig>;
+  /** Additional profile-level configuration */
+  [key: string]: unknown;
 }
 
 /**

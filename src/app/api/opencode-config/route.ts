@@ -1,39 +1,266 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizeVibePulseConfig, readConfig, writeConfig } from '@/lib/opencodeConfig';
 
-// Allowed fields to expose in the API
-const ALLOWED_AGENT_FIELDS = ['model', 'temperature', 'top_p', 'variant', 'prompt_append'] as const;
+const SECRET_FIELD_PATTERNS = [
+  'api',
+  'key',
+  'token',
+  'secret',
+  'password',
+  'auth',
+  'credential',
+  'private',
+  'cert',
+];
 
-/**
- * Filters an agent config to only include allowed fields
- */
-function filterAgentConfig(agent: Record<string, unknown>): Record<string, unknown> {
-  const filtered: Record<string, unknown> = {};
-  
-  for (const field of ALLOWED_AGENT_FIELDS) {
-    if (agent[field] !== undefined) {
-      filtered[field] = agent[field];
+const SAFE_TOKEN_FIELD_NAMES = new Set(['max_tokens', 'budget_tokens']);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSecretLikeField(field: string): boolean {
+  const normalizedField = field
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase();
+
+  const parts = normalizedField.split(/[^a-z0-9]+/);
+
+  // 1. Check for separated or camelCase fields (exact token matches)
+  if (parts.some((p) => p !== '' && SECRET_FIELD_PATTERNS.includes(p))) {
+    if (SAFE_TOKEN_FIELD_NAMES.has(normalizedField)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  // 2. Check for common concatenated sensitive fields (whole string matches)
+  // This satisfies the Codex check for "apikey", "accesstoken", "privatekey"
+  const concatenatedSecrets = [
+    'apikey',
+    'accesskey',
+    'accesstoken',
+    'authtoken',
+    'privatekey',
+    'secretkey',
+    'passwordhash',
+    'credential'
+  ];
+  if (concatenatedSecrets.includes(normalizedField)) {
+    return true;
+  }
+
+  return false;
+}
+
+function isAgentOrCategoryIdentifierPath(path: string): boolean {
+  return path === 'agents' || path === 'categories';
+}
+
+function collectSecretLikeFields(value: unknown, path = ''): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry, index) => collectSecretLikeFields(entry, `${path}[${index}]`));
+  }
+
+  if (!isPlainObject(value)) {
+    return [];
+  }
+
+  const disallowedFields: string[] = [];
+
+  for (const [key, childValue] of Object.entries(value)) {
+    const fieldPath = path ? `${path}.${key}` : key;
+    const isMapIdentifier = isAgentOrCategoryIdentifierPath(path);
+
+    if (!isMapIdentifier && isSecretLikeField(key)) {
+      disallowedFields.push(fieldPath);
+      continue;
+    }
+
+    disallowedFields.push(...collectSecretLikeFields(childValue, fieldPath));
+  }
+
+  return disallowedFields;
+}
+
+function stripSecretLikeFields(value: unknown, path = ''): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry, index) => stripSecretLikeFields(entry, `${path}[${index}]`));
+  }
+
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const safeValue: Record<string, unknown> = {};
+
+  for (const [key, childValue] of Object.entries(value)) {
+    const fieldPath = path ? `${path}.${key}` : key;
+    const isMapIdentifier = isAgentOrCategoryIdentifierPath(path);
+
+    if (isMapIdentifier || !isSecretLikeField(key)) {
+      safeValue[key] = stripSecretLikeFields(childValue, fieldPath);
     }
   }
-  
-  return filtered;
+
+  return safeValue;
+}
+
+function mergeUnknownConfigValue(currentValue: unknown, submittedValue: unknown): unknown {
+  if (!isPlainObject(currentValue) || !isPlainObject(submittedValue)) {
+    return submittedValue;
+  }
+
+  const mergedValue: Record<string, unknown> = { ...currentValue };
+
+  for (const [key, childValue] of Object.entries(submittedValue)) {
+    mergedValue[key] = mergeUnknownConfigValue(mergedValue[key], childValue);
+  }
+
+  return mergedValue;
+}
+
+function badRequest(error: string) {
+  return NextResponse.json({ error }, { status: 400 });
+}
+
+function forbidden(disallowedFields: string[]) {
+  return NextResponse.json(
+    { error: `Config contains disallowed fields: ${disallowedFields.join(', ')}` },
+    { status: 403 }
+  );
+}
+
+function validateStringField(section: string, field: string, value: unknown, options: { nonEmpty?: boolean } = {}) {
+  if (typeof value !== 'string' || (options.nonEmpty && value.trim() === '')) {
+    return badRequest(`${section}: ${field} must be ${options.nonEmpty ? 'a non-empty string' : 'a string'}`);
+  }
+
+  return null;
+}
+
+function validateFiniteNumber(section: string, field: string, value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return badRequest(`${section}: ${field} must be a finite number`);
+  }
+
+  return null;
+}
+
+function validateFallbackModelEntry(section: string, value: unknown) {
+  if (typeof value === 'string' || isPlainObject(value)) {
+    return null;
+  }
+
+  return badRequest(`${section}: fallback_models entries must be strings or objects`);
+}
+
+function validateAgentOrCategoryField(section: string, field: string, value: unknown) {
+  switch (field) {
+    case 'model':
+      return validateStringField(section, field, value, { nonEmpty: true });
+    case 'variant':
+    case 'prompt_append':
+    case 'description':
+    case 'category':
+    case 'system':
+      return validateStringField(section, field, value);
+    case 'reasoningEffort':
+      if (value === null) return null;
+      return validateStringField(section, field, value);
+    case 'temperature': {
+      const error = validateFiniteNumber(section, field, value);
+      if (error) return error;
+
+      const temperature = value as number;
+      if (temperature < 0 || temperature > 2) {
+        return badRequest(`${section}: temperature must be a number between 0 and 2`);
+      }
+
+      return null;
+    }
+    case 'top_p': {
+      const error = validateFiniteNumber(section, field, value);
+      if (error) return error;
+
+      const topP = value as number;
+      if (topP < 0 || topP > 1) {
+        return badRequest(`${section}: top_p must be a number between 0 and 1`);
+      }
+
+      return null;
+    }
+    case 'maxTokens':
+    case 'max_tokens': {
+      const error = validateFiniteNumber(section, field, value);
+      if (error) return error;
+
+      if ((value as number) <= 0) {
+        return badRequest(`${section}: ${field} must be greater than 0`);
+      }
+
+      return null;
+    }
+    case 'thinking':
+      if (typeof value !== 'boolean' && !isPlainObject(value)) {
+        return badRequest(`${section}: thinking must be a boolean or object`);
+      }
+
+      return null;
+    case 'fallback_models':
+      if (value === null) return null;
+      if (Array.isArray(value)) {
+        for (const entry of value) {
+          const error = validateFallbackModelEntry(section, entry);
+          if (error) return error;
+        }
+
+        return null;
+      }
+
+      return validateFallbackModelEntry(section, value);
+    default:
+      return null;
+  }
+}
+
+function validateVibePulseField(field: string, value: unknown) {
+  if (field === 'stickyBusyDelayMs' || field === 'sessionsRefreshIntervalMs') {
+    const error = validateFiniteNumber('Vibepulse', field, value);
+    if (error) return error;
+
+    if (field === 'stickyBusyDelayMs' && (value as number) < 0) {
+      return badRequest(`Vibepulse: '${field}' must be a non-negative number`);
+    }
+
+    if (field === 'sessionsRefreshIntervalMs' && (value as number) <= 0) {
+      return badRequest(`Vibepulse: '${field}' must be greater than 0`);
+    }
+  }
+
+  if (field === 'openEditorTargetMode' && value !== 'remote' && value !== 'hub') {
+    return badRequest(`Vibepulse: '${field}' must be either 'remote' or 'hub'`);
+  }
+
+  return null;
 }
 
 /**
  * GET /api/opencode-config
- * Returns filtered agent configuration
- * Only exposes: model, temperature, top_p
+ * Returns safe v4-compatible configuration
  * Filters out sensitive fields (apiKey, token, password, etc.)
  */
 export async function GET() {
   try {
     const config = await readConfig();
+    const safeConfig = stripSecretLikeFields(config) as Record<string, unknown>;
     const agents = config.agents || {};
     const filteredAgents: Record<string, Record<string, unknown>> = {};
     
     for (const [agentName, agentConfig] of Object.entries(agents)) {
-      if (typeof agentConfig === 'object' && agentConfig !== null) {
-        filteredAgents[agentName] = filterAgentConfig(agentConfig as Record<string, unknown>);
+      if (isPlainObject(agentConfig)) {
+        filteredAgents[agentName] = stripSecretLikeFields(agentConfig) as Record<string, unknown>;
       }
     }
 
@@ -41,16 +268,21 @@ export async function GET() {
     const filteredCategories: Record<string, Record<string, unknown>> = {};
     
     for (const [catName, catConfig] of Object.entries(categories)) {
-      if (typeof catConfig === 'object' && catConfig !== null && !Array.isArray(catConfig)) {
-        filteredCategories[catName] = filterAgentConfig(catConfig as Record<string, unknown>);
+      if (isPlainObject(catConfig)) {
+        filteredCategories[catName] = stripSecretLikeFields(catConfig) as Record<string, unknown>;
       }
     }
 
-    const vibepulse = normalizeVibePulseConfig(config.vibepulse);
+    const vibepulse = stripSecretLikeFields(normalizeVibePulseConfig(config.vibepulse));
+    const teamMode = isPlainObject(config.team_mode)
+      ? stripSecretLikeFields(config.team_mode)
+      : config.team_mode;
 
-    return NextResponse.json({ 
+    return NextResponse.json({
+      ...safeConfig,
       agents: filteredAgents,
       categories: filteredCategories,
+      team_mode: teamMode,
       vibepulse
     });
   } catch (error) {
@@ -65,7 +297,6 @@ export async function GET() {
 /**
  * POST /api/opencode-config
  * Updates agent configuration with validation
- * Only allows: model, temperature, top_p
  * Rejects sensitive fields (apiKey, token, password, secret, etc.)
  */
 export async function POST(request: NextRequest) {
@@ -73,19 +304,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Validate request structure
-    if (!body || typeof body !== 'object') {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json(
         { error: 'Invalid request body' },
         { status: 400 }
       );
     }
 
-    const { agents, categories, vibepulse } = body;
+    const disallowedFields = collectSecretLikeFields(body);
+    if (disallowedFields.length > 0) {
+      return forbidden(disallowedFields);
+    }
+
+    const { agents, categories, vibepulse, team_mode: teamMode } = body;
 
     // If neither agents, categories, nor vibepulse provided, nothing to update
-    if (agents === undefined && categories === undefined && vibepulse === undefined) {
+    if (Object.keys(body).length === 0) {
       return NextResponse.json(
-        { error: 'Missing agents, categories, or vibepulse field' },
+        { error: 'Missing config fields to update' },
         { status: 400 }
       );
     }
@@ -114,6 +350,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (teamMode !== undefined && (typeof teamMode !== 'object' || teamMode === null || Array.isArray(teamMode))) {
+      return NextResponse.json(
+        { error: 'team_mode must be an object' },
+        { status: 400 }
+      );
+    }
+
+    if (
+      isPlainObject(teamMode) &&
+      Object.prototype.hasOwnProperty.call(teamMode, 'enabled') &&
+      typeof teamMode.enabled !== 'boolean'
+    ) {
+      return NextResponse.json(
+        { error: 'team_mode.enabled must be a boolean' },
+        { status: 400 }
+      );
+    }
+
     // Read current config
     const currentConfig = await readConfig();
     const currentAgents = currentConfig.agents || {};
@@ -129,7 +383,7 @@ export async function POST(request: NextRequest) {
 
     if (agents !== undefined) {
       for (const [agentName, agentConfig] of Object.entries(agents)) {
-        if (typeof agentConfig !== 'object' || agentConfig === null || Array.isArray(agentConfig)) {
+        if (!isPlainObject(agentConfig)) {
           return NextResponse.json(
             { error: `Agent '${agentName}' config must be an object` },
             { status: 400 }
@@ -137,95 +391,27 @@ export async function POST(request: NextRequest) {
         }
 
         const config = agentConfig as Record<string, unknown>;
-        const disallowedFields: string[] = [];
-
-        for (const key of Object.keys(config)) {
-          const lowerKey = key.toLowerCase();
-          if (
-            lowerKey.includes('api') ||
-            lowerKey.includes('key') ||
-            lowerKey.includes('token') ||
-            lowerKey.includes('secret') ||
-            lowerKey.includes('password') ||
-            lowerKey.includes('auth') ||
-            lowerKey.includes('credential') ||
-            lowerKey.includes('private') ||
-            lowerKey.includes('cert')
-          ) {
-            disallowedFields.push(key);
-          }
-        }
-
-        if (disallowedFields.length > 0) {
-          return NextResponse.json(
-          {
-            error: `Agent '${agentName}' contains disallowed fields: ${disallowedFields.join(', ')}`
-          },
-          { status: 403 }
-        );
-      }
 
       const validatedConfig: Record<string, unknown> = {};
 
       for (const [field, value] of Object.entries(config)) {
-        const lowerField = field.toLowerCase();
+        const error = validateAgentOrCategoryField(`Agent '${agentName}'`, field, value);
+        if (error) return error;
 
-        if (lowerField === 'model') {
-          if (typeof value !== 'string' || value.trim() === '') {
-            return NextResponse.json(
-              { error: `Agent '${agentName}': model must be a non-empty string` },
-              { status: 400 }
-            );
-          }
-          validatedConfig[field] = value;
-        } else if (lowerField === 'temperature') {
-          const temp = Number(value);
-          if (isNaN(temp) || temp < 0 || temp > 2) {
-            return NextResponse.json(
-              { error: `Agent '${agentName}': temperature must be a number between 0 and 2` },
-              { status: 400 }
-            );
-          }
-          validatedConfig[field] = temp;
-         } else if (lowerField === 'top_p') {
-           const topP = Number(value);
-           if (isNaN(topP) || topP < 0 || topP > 1) {
-             return NextResponse.json(
-               { error: `Agent '${agentName}': top_p must be a number between 0 and 1` },
-               { status: 400 }
-             );
-           }
-           validatedConfig[field] = topP;
-         } else if (lowerField === 'variant') {
-           if (typeof value !== 'string') {
-             return NextResponse.json(
-               { error: `Agent '${agentName}': variant must be a string` },
-               { status: 400 }
-             );
-           }
-           validatedConfig[field] = value;
-         } else if (lowerField === 'prompt_append') {
-           if (typeof value !== 'string') {
-             return NextResponse.json(
-               { error: `Agent '${agentName}': prompt_append must be a string` },
-               { status: 400 }
-             );
-           }
-           validatedConfig[field] = value;
-         } else {
-           return NextResponse.json(
-             {
-               error: `Agent '${agentName}': unknown field '${field}'. Allowed fields: model, temperature, top_p, variant, prompt_append`
-             },
-             { status: 400 }
-           );
-        }
+        validatedConfig[field] = value;
       }
 
       updatedAgents[agentName] = {
         ...(currentAgents[agentName] as Record<string, unknown> || {}),
         ...validatedConfig
       };
+      
+      if (validatedConfig.reasoningEffort === null) {
+        delete updatedAgents[agentName].reasoningEffort;
+      }
+      if (validatedConfig.fallback_models === null) {
+        delete updatedAgents[agentName].fallback_models;
+      }
     }
   }
 
@@ -241,7 +427,7 @@ export async function POST(request: NextRequest) {
 
   if (categories !== undefined) {
     for (const [categoryName, categoryConfig] of Object.entries(categories)) {
-      if (typeof categoryConfig !== 'object' || categoryConfig === null || Array.isArray(categoryConfig)) {
+      if (!isPlainObject(categoryConfig)) {
         return NextResponse.json(
           { error: `Category '${categoryName}' config must be an object` },
           { status: 400 }
@@ -252,39 +438,23 @@ export async function POST(request: NextRequest) {
       const validatedCategoryConfig: Record<string, unknown> = {};
 
       for (const [field, value] of Object.entries(configObj)) {
-        if (field === 'model' || field === 'variant' || field === 'prompt_append' || field === 'description') {
-          if (value !== undefined && typeof value !== 'string') {
-             return NextResponse.json(
-               { error: `Category '${categoryName}': '${field}' must be a string` },
-               { status: 400 }
-             );
-          }
-          validatedCategoryConfig[field] = value;
-        } else if (field === 'temperature' || field === 'top_p') {
-          if (value !== undefined && typeof value !== 'number') {
-             return NextResponse.json(
-               { error: `Category '${categoryName}': '${field}' must be a number` },
-               { status: 400 }
-             );
-          }
-          
-          const numValue = value as number;
-          const temp = field === 'temperature' ? Math.max(0, Math.min(2, numValue)) : numValue;
-          const topP = field === 'top_p' ? Math.max(0, Math.min(1, numValue)) : numValue;
-          
-          validatedCategoryConfig[field] = field === 'temperature' ? temp : topP;
-        } else {
-           return NextResponse.json(
-             { error: `Category '${categoryName}': unknown field '${field}'` },
-             { status: 400 }
-           );
-        }
+        const error = validateAgentOrCategoryField(`Category '${categoryName}'`, field, value);
+        if (error) return error;
+
+        validatedCategoryConfig[field] = value;
       }
       
       updatedCategories[categoryName] = {
         ...((currentCategories[categoryName] as Record<string, unknown>) || {}),
         ...validatedCategoryConfig
       };
+      
+      if (validatedCategoryConfig.reasoningEffort === null) {
+        delete updatedCategories[categoryName].reasoningEffort;
+      }
+      if (validatedCategoryConfig.fallback_models === null) {
+        delete updatedCategories[categoryName].fallback_models;
+      }
     }
   }
 
@@ -298,72 +468,53 @@ export async function POST(request: NextRequest) {
     }
     
     for (const [field, value] of Object.entries(vibepulse as Record<string, unknown>)) {
-      if (field === 'stickyBusyDelayMs' || field === 'sessionsRefreshIntervalMs') {
-        if (value !== undefined && typeof value !== 'number') {
-           return NextResponse.json(
-             { error: `Vibepulse: '${field}' must be a number` },
-             { status: 400 }
-           );
-        }
-        if (typeof value === 'number') {
-           if (!Number.isFinite(value)) {
-             return NextResponse.json(
-               { error: `Vibepulse: '${field}' must be a finite number` },
-               { status: 400 }
-             );
-           }
+      const error = validateVibePulseField(field, value);
+      if (error) return error;
 
-           if (field === 'stickyBusyDelayMs' && value < 0) {
-             return NextResponse.json(
-               { error: `Vibepulse: '${field}' must be a non-negative number` },
-               { status: 400 }
-             );
-           }
-
-           if (field === 'sessionsRefreshIntervalMs' && value <= 0) {
-             return NextResponse.json(
-               { error: `Vibepulse: '${field}' must be greater than 0` },
-               { status: 400 }
-             );
-           }
-
-            updatedVibepulse[field] = value;
-         }
-      } else if (field === 'openEditorTargetMode') {
-        if (value !== 'remote' && value !== 'hub') {
-          return NextResponse.json(
-            { error: `Vibepulse: '${field}' must be either 'remote' or 'hub'` },
-            { status: 400 }
-          );
-        }
-
-        updatedVibepulse[field] = value;
-      } else {
-         return NextResponse.json(
-            { error: `Vibepulse: unknown field '${field}'` },
-           { status: 400 }
-         );
-      }
+      updatedVibepulse[field] = value;
     }
   }
 
   // Update config and save
   const newConfig = { ...currentConfig } as Record<string, unknown>;
+
+  for (const [field, value] of Object.entries(body)) {
+    if (field !== 'agents' && field !== 'categories' && field !== 'vibepulse' && field !== 'team_mode') {
+      newConfig[field] = mergeUnknownConfigValue(newConfig[field], value);
+    }
+  }
+
   if (agents !== undefined) newConfig.agents = updatedAgents;
   if (categories !== undefined) newConfig.categories = updatedCategories;
   if (vibepulse !== undefined) newConfig.vibepulse = updatedVibepulse;
+  if (teamMode !== undefined) {
+    newConfig.team_mode = {
+      ...(isPlainObject(currentConfig.team_mode) ? currentConfig.team_mode : {}),
+      ...(teamMode as Record<string, unknown>),
+    };
+  }
   
   // writeConfig type doesn't natively expose categories yet, safely bypassing
   await writeConfig(
     newConfig as { 
-      agents?: Record<string, Record<string, unknown>>; 
-      categories?: Record<string, Record<string, unknown>>; 
-      vibepulse?: Record<string, unknown>;
-    }
-  );
+       agents?: Record<string, Record<string, unknown>>; 
+       categories?: Record<string, Record<string, unknown>>; 
+       vibepulse?: Record<string, unknown>;
+       team_mode?: Record<string, unknown>;
+     }
+   );
+
+  const safeResponse = stripSecretLikeFields(newConfig) as Record<string, unknown>;
 
   return NextResponse.json(
-    { success: true, agents: updatedAgents, categories: updatedCategories, vibepulse: updatedVibepulse },
+    {
+      ...safeResponse,
+      success: true,
+      agents: safeResponse.agents,
+      categories: safeResponse.categories,
+      team_mode: safeResponse.team_mode,
+      vibepulse: safeResponse.vibepulse,
+    },
     { status: 200 }
   );
 } catch (error) {

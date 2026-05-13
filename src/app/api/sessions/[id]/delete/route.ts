@@ -1,8 +1,8 @@
-import { createOpencodeClient } from '@opencode-ai/sdk';
 import { discoverOpencodePortsWithMeta } from '@/lib/opencodeDiscovery';
 import { ActionSessionReference, parseActionSessionReference, resolveLocalActionSessionId } from '@/lib/hostIdentity';
 import { listNodeRecords } from '@/lib/nodeRegistry';
 import { createNodeRequestHeaders } from '@/lib/nodeProtocol';
+import { createVibePulseOpencodeClient, deleteOpencodeSession, formatOpencodeSdkError } from '@/lib/session-providers/opencodeSdkCompat';
 import { detectProviderFromRawId, extractProviderRawId, getDefaultProviderContext } from '@/lib/session-providers/providerIds';
 import {
     clearSessionForceUnarchived,
@@ -146,8 +146,8 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     const errors: Error[] = [];
     for (const port of ports) {
         try {
-            const client = createOpencodeClient({ baseUrl: `http://localhost:${port}` });
-            await client.session.delete({ path: { id: sessionId } });
+            const client = createVibePulseOpencodeClient(`http://localhost:${port}`);
+            await deleteOpencodeSession(client, sessionId);
             clearSessionForceUnarchived(sessionId);
             clearSessionStickyStatusBlocked(sessionId);
             return Response.json({ success: true });
@@ -157,14 +157,14 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     }
 
     const lastError = errors[errors.length - 1];
-    if (errors.length > 0 && errors.every((error) => /not found|404/i.test(error.message))) {
-        return createSessionNotFoundResponse(lastError?.message);
+    if (errors.length > 0 && errors.every((error) => /not found|404/i.test(formatOpencodeSdkError(error)))) {
+        return createSessionNotFoundResponse(lastError ? formatOpencodeSdkError(lastError) : undefined);
     }
 
     return Response.json(
         {
             error: 'Failed to delete session',
-            message: lastError?.message,
+            message: lastError ? formatOpencodeSdkError(lastError) : undefined,
             portsTried: ports.length,
         },
         { status: 500 }

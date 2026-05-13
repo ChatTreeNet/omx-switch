@@ -56,6 +56,33 @@ describe('/api/sessions/[id]/delete', () => {
     expect(mockSessionDelete).toHaveBeenCalledWith({ path: { id: 'abc' } });
   });
 
+  it('deletes on the next discovered OpenCode port when the first port fails', async () => {
+    mockDiscoverPortsWithMeta.mockReturnValue({ ports: [7777, 7778], timedOut: false });
+    const deleteByPort: Record<string, ReturnType<typeof vi.fn>> = {
+      'http://localhost:7777': vi.fn(async () => {
+        throw new Error('port 7777 offline');
+      }),
+      'http://localhost:7778': vi.fn(async () => undefined),
+    };
+    mockCreateOpencodeClient.mockImplementation(({ baseUrl }: { baseUrl: string }) => ({
+      session: {
+        delete: deleteByPort[baseUrl],
+      },
+    }) as never);
+
+    const response = await POST(new Request('http://localhost/api/sessions/local:abc/delete', { method: 'POST' }), {
+      params: Promise.resolve({ id: 'local:abc' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockCreateOpencodeClient.mock.calls).toEqual([
+      [{ baseUrl: 'http://localhost:7777' }],
+      [{ baseUrl: 'http://localhost:7778' }],
+    ]);
+    expect(deleteByPort['http://localhost:7777']).toHaveBeenCalledWith({ path: { id: 'abc' } });
+    expect(deleteByPort['http://localhost:7778']).toHaveBeenCalledWith({ path: { id: 'abc' } });
+  });
+
   it('forwards remote delete ids to the matching node endpoint', async () => {
     mockListNodeRecords.mockResolvedValue([
       {
@@ -115,6 +142,27 @@ describe('/api/sessions/[id]/delete', () => {
       reason: 'session_not_found',
       message: '404 not found',
     });
+  });
+
+  it('maps object-shaped SDK BadRequest delete failures to session_not_found', async () => {
+    mockSessionDelete.mockRejectedValue({
+      name: 'BadRequestError',
+      statusCode: 404,
+      data: { error: 'session not found' },
+    });
+
+    const response = await POST(new Request('http://localhost/api/sessions/local:abc/delete', { method: 'POST' }), {
+      params: Promise.resolve({ id: 'local:abc' }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(data).toEqual({
+      error: 'Session not found',
+      reason: 'session_not_found',
+      message: 'BadRequestError 404: session not found',
+    });
+    expect(mockSessionDelete).toHaveBeenCalledWith({ path: { id: 'abc' } });
   });
 
   it('deletes Claude sessions through local override storage before any OpenCode execution', async () => {

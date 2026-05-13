@@ -251,6 +251,59 @@ describe('/api/opencode-events', () => {
     await reader!.cancel();
   });
 
+  it('streams from the next discovered OpenCode port when the first local port preflight fails', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockDiscoverPortsWithMeta.mockReturnValue({ ports: [7777, 7778], timedOut: false });
+
+    mockCreateOpencodeClient.mockImplementation(({ baseUrl }: { baseUrl: string }) => ({
+      global: {
+        event: vi.fn(async () => {
+          if (baseUrl === 'http://localhost:7777') {
+            throw new Error('port 7777 offline');
+          }
+
+          return {
+            stream: createAsyncIterable([
+              {
+                type: 'session.status',
+                properties: {
+                  sessionID: 'surviving-port-session',
+                  status: { type: 'busy' },
+                },
+                timestamp: 400,
+              },
+            ]),
+          };
+        }),
+      },
+    }) as never);
+
+    const response = await GET(new Request('http://localhost/api/opencode-events'));
+
+    expect(response.status).toBe(200);
+    expect(mockCreateOpencodeClient.mock.calls).toEqual(expect.arrayContaining([
+      [{ baseUrl: 'http://localhost:7777' }],
+      [{ baseUrl: 'http://localhost:7778' }],
+    ]));
+    expect(mockCreateOpencodeClient.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+    const reader = response.body?.getReader();
+    expect(reader).toBeTruthy();
+
+    const first = await readPayload(reader!);
+    expect(first).toEqual({
+      type: 'session.status',
+      properties: {
+        sessionID: 'surviving-port-session',
+        status: { type: 'busy' },
+      },
+      timestamp: 400,
+    });
+
+    await reader!.cancel();
+    warnSpy.mockRestore();
+  });
+
   it('keeps the shared stream alive when one remote node stream fails', async () => {
     mockGlobalEvent.mockResolvedValue({
       stream: createAsyncIterable([
@@ -620,6 +673,27 @@ describe('/api/opencode-events', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
+
+  it('returns a graceful unavailable response when latest root SDK event preflight rejects with BadRequest shape', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockGlobalEvent.mockRejectedValue({
+      name: 'BadRequestError',
+      status: 400,
+      body: { message: 'event stream unavailable' },
+    });
+
+    const response = await GET(new Request('http://localhost/api/opencode-events'));
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: 'Failed to connect to OpenCode event streams',
+      hint: 'Detected local and/or remote node event sources, but every streaming handshake failed. Ensure the hub can reach each source and retry.',
+    });
+    expect(mockGlobalEvent).toHaveBeenCalledWith({ signal: expect.any(AbortSignal) });
 
     warnSpy.mockRestore();
   });

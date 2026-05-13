@@ -203,7 +203,7 @@ describe('SessionCard', () => {
       },
     });
     queryClient.setQueryData(['opencode-config'], { vibepulse: { openEditorTargetMode: 'remote' } });
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL, _init?: RequestInit) => {
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -327,7 +327,7 @@ describe('SessionCard', () => {
     });
     queryClient.setQueryData(['opencode-config'], { vibepulse: { openEditorTargetMode: 'remote' } });
     const deferred: { resolve: null | (() => void) } = { resolve: null };
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async () => {
       await new Promise<void>((resolve) => {
         deferred.resolve = resolve;
       });
@@ -513,7 +513,7 @@ describe('SessionCard', () => {
       },
     });
     queryClient.setQueryData(['opencode-config'], { vibepulse: { openEditorTargetMode: 'remote' } });
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async () => {
       return new Response(JSON.stringify({ reason: 'editor_unavailable' }), {
         status: 503,
         headers: { 'Content-Type': 'application/json' },
@@ -544,7 +544,7 @@ describe('SessionCard', () => {
       },
     });
     queryClient.setQueryData(['opencode-config'], { vibepulse: { openEditorTargetMode: 'remote' } });
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async () => {
       return new Response(JSON.stringify({ reason: 'node_request_failed_501' }), {
         status: 501,
         headers: { 'Content-Type': 'application/json' },
@@ -574,7 +574,7 @@ describe('SessionCard', () => {
       },
     });
     queryClient.setQueryData(['opencode-config'], { vibepulse: { openEditorTargetMode: 'remote' } });
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async () => {
       return new Response(JSON.stringify({
         error: 'Session not found',
         reason: 'session_not_found',
@@ -714,7 +714,7 @@ describe('SessionCard', () => {
       },
     });
     queryClient.setQueryData(['opencode-config'], { vibepulse: { openEditorTargetMode: 'remote' } });
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async () => {
       throw new Error('network failed');
     });
     Object.defineProperty(globalThis, 'fetch', { value: fetchMock, configurable: true });

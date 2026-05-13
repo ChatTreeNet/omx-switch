@@ -2115,6 +2115,79 @@ describe('/api/sessions route source handling', () => {
     ]);
   });
 
+  it('returns degraded local sessions when one discovered OpenCode port fails and another succeeds', async () => {
+    setupLocalSessionsMocks();
+    mockDiscoverPortsWithMeta.mockReturnValue({
+      ports: [7777, 7778],
+      timedOut: false,
+    });
+
+    const port7778Messages = vi.fn(async () => ({
+      data: [{ parts: [{ state: { status: 'running' } }] }],
+    }));
+    mockCreateOpencodeClient.mockImplementation(({ baseUrl }: { baseUrl: string }) => {
+      if (baseUrl === 'http://localhost:7777') {
+        return {
+          session: {
+            list: vi.fn(async () => {
+              throw new Error('port 7777 offline');
+            }),
+            status: vi.fn(async () => ({ data: {} })),
+            messages: vi.fn(async () => ({ data: [] })),
+          },
+        } as never;
+      }
+
+      if (baseUrl === 'http://localhost:7778') {
+        return {
+          session: {
+            list: vi.fn(async () => ({
+              data: [
+                {
+                  id: 'surviving-parent',
+                  title: 'Surviving Parent',
+                  directory: '/repo/project-one',
+                  time: { created: 2_000, updated: Date.now() - 1_000 },
+                },
+              ],
+            })),
+            status: vi.fn(async () => ({ data: { 'surviving-parent': { type: 'busy' } } })),
+            messages: port7778Messages,
+          },
+        } as never;
+      }
+
+      throw new Error(`Unexpected baseUrl: ${baseUrl}`);
+    });
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.degraded).toBe(true);
+    expect(data.failedPorts).toEqual([
+      { port: 7777, reason: 'port 7777 offline' },
+    ]);
+    expect(data.sessions).toEqual([
+      expect.objectContaining({
+        id: 'surviving-parent',
+        title: 'Surviving Parent',
+        realTimeStatus: 'busy',
+        projectName: 'project-one',
+        children: [],
+      }),
+    ]);
+    expect(mockCreateOpencodeClient.mock.calls).toEqual([
+      [{ baseUrl: 'http://localhost:7777' }],
+      [{ baseUrl: 'http://localhost:7778' }],
+    ]);
+    expect(port7778Messages).toHaveBeenCalledWith({
+      path: { id: 'surviving-parent' },
+      query: { limit: 8 },
+      signal: expect.any(AbortSignal),
+    });
+  });
+
   it('keeps GET offline behavior but returns a degraded error payload for local-only POST when Local is offline', async () => {
     mockReadConfig.mockResolvedValue({
       vibepulse: {
