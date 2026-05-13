@@ -480,6 +480,30 @@ describe('opencodeConfig', () => {
       }
     });
 
+    it('rejects malformed legacy config without creating canonical config', async () => {
+      const testDir = await mkdtemp(join(tmpdir(), 'vibepulse-migrate-'));
+      const legacyPath = join(testDir, 'oh-my-opencode.jsonc');
+      const canonicalPath = join(testDir, 'oh-my-openagent.jsonc');
+      const backupPath = join(testDir, 'legacy.backup');
+      const malformedLegacyConfig = '{"agents":{"sisyphus":{"model":"legacy"}}';
+
+      await writeFile(legacyPath, malformedLegacyConfig);
+
+      try {
+        await expect(migrateLegacyConfig({
+          legacyPath,
+          canonicalPath,
+          backupPath,
+        })).rejects.toThrow('Failed to read legacy config');
+
+        expect(await readFile(legacyPath, 'utf-8')).toBe(malformedLegacyConfig);
+        expect(await readFile(backupPath, 'utf-8')).toBe(malformedLegacyConfig);
+        expect(existsSync(canonicalPath)).toBe(false);
+      } finally {
+        await rm(testDir, { recursive: true, force: true });
+      }
+    });
+
     it('reads the legacy v3 basename fixture', async () => {
       const config = await readConfig(LEGACY_V3_FIXTURE_PATH);
 

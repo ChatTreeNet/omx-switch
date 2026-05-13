@@ -152,6 +152,15 @@ export async function readConfig(configPath: string = CONFIG_PATH): Promise<Open
   }
 }
 
+async function readLegacyConfigForMigration(legacyPath: string): Promise<OpenCodeConfig> {
+  try {
+    const content = await readFile(legacyPath, 'utf-8');
+    return parse(content, null, false) as OpenCodeConfig;
+  } catch (error) {
+    throw new Error(`Failed to read legacy config: ${error}`);
+  }
+}
+
 export async function readEffectiveConfig(options: EffectiveConfigOptions = {}): Promise<OpenCodeConfig> {
   const userConfig = await readConfig(options.userConfigPath);
   const projectConfigPath = options.projectConfigPath === undefined
@@ -221,7 +230,7 @@ export async function migrateLegacyConfig(options: LegacyMigrationOptions = {}):
   await copyFile(legacyPath, backupPath);
 
   try {
-    const legacyConfig = await readConfig(legacyPath);
+    const legacyConfig = await readLegacyConfigForMigration(legacyPath);
     const writeCanonicalConfig = options.writeCanonicalConfig ?? writeConfig;
     await writeCanonicalConfig(legacyConfig, canonicalPath);
     return { migrated: true, legacyPath, canonicalPath, backupPath };
