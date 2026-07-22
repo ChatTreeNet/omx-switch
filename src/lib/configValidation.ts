@@ -56,8 +56,11 @@ function isSecretLikeField(field: string): boolean {
   return false;
 }
 
-function isAgentOrCategoryIdentifierPath(path: string): boolean {
-  return path === 'agents' || path === 'categories' || path === 'modelRoles';
+// Map-valued config sections whose keys are identifiers (agent/category/role
+// names), not fields — secret-like names there are validated separately, not
+// rejected as secrets
+function isConfigMapIdentifierPath(path: string): boolean {
+  return path === 'agents' || path === 'categories' || path === 'modelRoles' || path === 'fallbackChains';
 }
 
 export function collectSecretLikeFields(value: unknown, path = ''): string[] {
@@ -73,7 +76,7 @@ export function collectSecretLikeFields(value: unknown, path = ''): string[] {
 
   for (const [key, childValue] of Object.entries(value)) {
     const fieldPath = path ? `${path}.${key}` : key;
-    const isMapIdentifier = isAgentOrCategoryIdentifierPath(path);
+    const isMapIdentifier = isConfigMapIdentifierPath(path);
 
     if (!isMapIdentifier && isSecretLikeField(key)) {
       disallowedFields.push(fieldPath);
@@ -99,7 +102,7 @@ export function stripSecretLikeFields(value: unknown, path = ''): unknown {
 
   for (const [key, childValue] of Object.entries(value)) {
     const fieldPath = path ? `${path}.${key}` : key;
-    const isMapIdentifier = isAgentOrCategoryIdentifierPath(path);
+    const isMapIdentifier = isConfigMapIdentifierPath(path);
 
     if (isMapIdentifier || !isSecretLikeField(key)) {
       safeValue[key] = stripSecretLikeFields(childValue, fieldPath);

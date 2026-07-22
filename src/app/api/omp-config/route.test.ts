@@ -206,6 +206,20 @@ describe('/api/omp-config', () => {
     });
   });
 
+  it('allows secret-like role names in modelRoles and fallbackChains keys', async () => {
+    mockReadConfig.mockResolvedValue({});
+
+    const response = await POST(createPostRequest({
+      modelRoles: { token: 'kimi-code/k3' },
+      fallbackChains: { token: ['openai/gpt-5.4'] },
+    }));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.modelRoles).toEqual({ token: 'kimi-code/k3' });
+    expect(data.fallbackChains).toEqual({ token: ['openai/gpt-5.4'] });
+  });
+
   it('rejects malformed fallback chains', async () => {
     for (const bad of [[''], 'not-an-array', [42]]) {
       const response = await POST(createPostRequest({
