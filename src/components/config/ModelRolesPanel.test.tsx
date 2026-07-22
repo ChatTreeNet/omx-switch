@@ -204,6 +204,25 @@ describe('ModelRolesPanel', () => {
     });
   });
 
+  it('clears the stale selection after a role is unset and saved', async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<ModelRolesPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('omp-role-default-model')).toHaveValue('kimi-code/k3');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Unset Default role' }));
+    await user.click(screen.getByRole('button', { name: /Save/ }));
+
+    // After the save, the refetched config no longer contains the role; the
+    // selector must fall back to the unset placeholder, not the stale model.
+    await waitFor(() => {
+      expect(screen.getByLabelText('omp-role-default-model')).toHaveValue('');
+    });
+    expect(screen.queryByRole('button', { name: 'Unset Default role' })).not.toBeInTheDocument();
+  });
+
   it('posts the fallback master toggle when changed', async () => {
     const user = userEvent.setup();
     renderWithQuery(<ModelRolesPanel />);

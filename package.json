@@ -7,6 +7,14 @@
     "type": "git",
     "url": "https://github.com/ChatTreeNet/VibePulse"
   },
+  "files": [
+    ".next",
+    "bin",
+    "public",
+    "package.json",
+    "next.config.ts",
+    "README.md"
+  ],
   "scripts": {
     "dev": "node ./bin/dev-runtime.js",
     "dev:hub": "node ./bin/dev-runtime.js hub",

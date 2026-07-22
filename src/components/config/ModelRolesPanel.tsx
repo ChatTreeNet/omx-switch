@@ -59,13 +59,18 @@ export function ModelRolesPanel() {
   );
   const configuredFallbackEnabled = configQuery.data?.modelFallback !== false;
 
-  // Follow the on-disk config for any role the user has not edited
+  // Follow the on-disk config for any role the user has not edited; roles
+  // deleted from the file (e.g. unset + saved) must also leave `selections`,
+  // while in-progress edits to unconfigured roles must survive.
   React.useEffect(() => {
     setSelections((prev) => {
-      const next: Record<string, string> = { ...prev };
-      for (const role of Object.keys(configuredRoles)) {
-        if (!dirtyRoles[role]) {
-          next[role] = configuredRoles[role];
+      const next: Record<string, string> = {};
+      for (const [role, model] of Object.entries(configuredRoles)) {
+        next[role] = dirtyRoles[role] ? (prev[role] ?? model) : model;
+      }
+      for (const role of Object.keys(dirtyRoles)) {
+        if (!(role in next) && prev[role] !== undefined) {
+          next[role] = prev[role];
         }
       }
       return next;
@@ -74,10 +79,13 @@ export function ModelRolesPanel() {
 
   React.useEffect(() => {
     setChainDrafts((prev) => {
-      const next: Record<string, string[]> = { ...prev };
+      const next: Record<string, string[]> = {};
       for (const [key, chain] of Object.entries(configuredChains)) {
-        if (!dirtyChains[key]) {
-          next[key] = chain;
+        next[key] = dirtyChains[key] ? (prev[key] ?? chain) : chain;
+      }
+      for (const key of Object.keys(dirtyChains)) {
+        if (!(key in next) && prev[key] !== undefined) {
+          next[key] = prev[key];
         }
       }
       return next;
