@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Check } from 'lucide-react';
 import type { Profile, ProfileConfig } from '../../../types/omoConfig';
+import type { ApiTarget } from '@/lib/queries';
 import { ProfileList } from './ProfileList';
 import { ProfileEditor } from './ProfileEditor';
 
@@ -13,17 +14,18 @@ interface ProfilesResponse {
 }
 
 interface ProfileManagerProps {
+  apiTarget: ApiTarget;
   onSaveSuccess?: () => void;
 }
 
 const PROFILE_FETCH_TIMEOUT_MS = 8000;
 
-async function fetchProfiles(): Promise<ProfilesResponse> {
+async function fetchProfiles(profilesBase: string): Promise<ProfilesResponse> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), PROFILE_FETCH_TIMEOUT_MS);
 
   try {
-    const res = await fetch('/api/profiles', { signal: controller.signal });
+    const res = await fetch(profilesBase, { signal: controller.signal });
 
     if (!res.ok) {
       throw new Error('Failed to fetch profiles');
@@ -60,7 +62,8 @@ async function readFileText(file: File): Promise<string> {
   return new Response(file).text();
 }
 
-export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
+export function ProfileManager({ apiTarget, onSaveSuccess }: ProfileManagerProps) {
+  const profilesBase = apiTarget === 'omo' ? '/api/profiles' : '/api/omp-profiles';
   const queryClient = useQueryClient();
   const [editingProfile, setEditingProfile] = React.useState<Profile | null>(null);
   const [editingProfileConfig, setEditingProfileConfig] = React.useState<ProfileConfig | undefined>(undefined);
@@ -77,8 +80,8 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
     isError,
     error,
   } = useQuery<ProfilesResponse>({
-    queryKey: ['profiles'],
-    queryFn: fetchProfiles,
+    queryKey: ['profiles', apiTarget],
+    queryFn: () => fetchProfiles(profilesBase),
     retry: false,
   });
 
@@ -97,7 +100,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
 
   const applyMutation = useMutation({
     mutationFn: async (profileId: string) => {
-      const res = await fetch(`/api/profiles/${profileId}/apply`, {
+      const res = await fetch(`${profilesBase}/${profileId}/apply`, {
         method: 'POST',
       });
 
@@ -109,8 +112,8 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
       return res.json();
     },
     onSuccess: (_, profileId) => {
-      queryClient.invalidateQueries({ queryKey: ['profiles'] });
-      queryClient.invalidateQueries({ queryKey: ['config', 'omo'] });
+      queryClient.invalidateQueries({ queryKey: ['profiles', apiTarget] });
+      queryClient.invalidateQueries({ queryKey: ['config', apiTarget] });
       setAppliedProfileId(profileId);
       setToast({ type: 'success', message: 'Profile applied successfully' });
     },
@@ -127,7 +130,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
       profile: Partial<Profile>;
       config: ProfileConfig;
     }) => {
-      const res = await fetch('/api/profiles', {
+      const res = await fetch(profilesBase, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profile, config }),
@@ -141,7 +144,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['profiles', apiTarget] });
       setToast({ type: 'success', message: 'Profile created successfully' });
       setIsCreating(false);
       onSaveSuccess?.();
@@ -161,7 +164,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
       profile: Partial<Profile>;
       config: ProfileConfig;
     }) => {
-      const res = await fetch(`/api/profiles/${id}`, {
+      const res = await fetch(`${profilesBase}/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profile, config }),
@@ -175,7 +178,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['profiles', apiTarget] });
       setToast({ type: 'success', message: 'Profile updated successfully' });
       setEditingProfile(null);
       onSaveSuccess?.();
@@ -187,7 +190,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
 
   const deleteMutation = useMutation({
     mutationFn: async (profileId: string) => {
-      const res = await fetch(`/api/profiles/${profileId}`, {
+      const res = await fetch(`${profilesBase}/${profileId}`, {
         method: 'DELETE',
       });
 
@@ -199,7 +202,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['profiles', apiTarget] });
       setToast({ type: 'success', message: 'Profile deleted successfully' });
     },
     onError: (err: Error) => {
@@ -209,7 +212,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
 
   const exportMutation = useMutation({
     mutationFn: async (profile: Profile) => {
-      const res = await fetch(`/api/profiles/${profile.id}/export`);
+      const res = await fetch(`${profilesBase}/${profile.id}/export`);
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -220,7 +223,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
       return { blob, profile };
     },
     onSuccess: ({ blob, profile }) => {
-      triggerJsonDownload(blob, `${profile.id}.vibepulse-profile.json`);
+      triggerJsonDownload(blob, `${profile.id}.${apiTarget}-profile.json`);
       setToast({ type: 'success', message: `Exported ${profile.name}` });
     },
     onError: (err: Error) => {
@@ -238,7 +241,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
         throw new Error('Profile file must be valid JSON');
       }
 
-      const res = await fetch('/api/profiles/import', {
+      const res = await fetch(`${profilesBase}/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -252,7 +255,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
       return res.json();
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['profiles', apiTarget] });
       const importedName =
         result &&
         typeof result === 'object' &&
@@ -279,7 +282,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
     setIsCreating(false);
     
     try {
-      const res = await fetch(`/api/profiles/${profile.id}`);
+      const res = await fetch(`${profilesBase}/${profile.id}`);
       if (res.ok) {
         const data = await res.json();
         setEditingProfileConfig(data.config);
@@ -381,6 +384,7 @@ export function ProfileManager({ onSaveSuccess }: ProfileManagerProps) {
       {editingProfile || isCreating ? (
         <ProfileEditor
           profile={editingProfile ?? undefined}
+          apiTarget={apiTarget}
           initialConfig={editingProfileConfig}
           onSave={handleSave}
           onCancel={handleCancelEdit}

@@ -122,30 +122,46 @@ export function ConfigWorkspace({ apiTarget }: ConfigWorkspaceProps) {
           >
             Model Roles
           </button>
-        ) : (
-        <>
-        <button
-          type="button"
-          onClick={() => setActiveTab('agents')}
-          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-            activeTab === 'agents'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-700'
-          }`}
-        >
-          Agents
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('categories')}
-          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-            activeTab === 'categories'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-700'
-          }`}
-        >
-          Categories
-        </button>
+        ) : null}
+        {apiTarget === 'omp' ? (
+          <button
+            type="button"
+            onClick={() => setActiveTab('profiles')}
+            className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+              activeTab === 'profiles'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-700'
+            }`}
+          >
+            Profiles
+          </button>
+        ) : null}
+        {apiTarget === 'omo' && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveTab('agents')}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                activeTab === 'agents'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-700'
+              }`}
+            >
+              Agents
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('categories')}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                activeTab === 'categories'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-700'
+              }`}
+            >
+              Categories
+            </button>
+          </>
+        )}
         {apiTarget === 'omo' && (
           <button
             type="button"
@@ -158,8 +174,6 @@ export function ConfigWorkspace({ apiTarget }: ConfigWorkspaceProps) {
           >
             Profiles
           </button>
-        )}
-        </>
         )}
       </div>
 
@@ -339,7 +353,7 @@ export function ConfigWorkspace({ apiTarget }: ConfigWorkspaceProps) {
                 Manage configuration profiles for different agent setups
               </p>
             </div>
-            <ProfileManager />
+            <ProfileManager apiTarget={apiTarget} />
           </div>
         </main>
       )}

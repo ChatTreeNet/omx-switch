@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Check, AlertCircle, Loader2, Upload, ChevronDown, RotateCcw } from 'lucide-react';
 import { Profile, ProfileConfig } from '../../../types/omoConfig';
+import type { ApiTarget } from '@/lib/queries';
 
 interface ProfileFormData {
   id: string;
@@ -14,6 +15,7 @@ interface ProfileFormData {
 
 interface ProfileEditorProps {
   profile?: Profile;
+  apiTarget: ApiTarget;
   initialConfig?: ProfileConfig;
   onSave: (data: { profile: Partial<Profile>; config: ProfileConfig }) => void;
   onCancel: () => void;
@@ -27,6 +29,7 @@ const COMMON_EMOJIS = [
 
 export function ProfileEditor({
   profile,
+  apiTarget,
   initialConfig,
   onSave,
   onCancel,
@@ -78,15 +81,22 @@ export function ProfileEditor({
 
   const handleImportFromCurrent = async () => {
     try {
-      const res = await fetch('/api/omo-config');
+      const res = await fetch(`/api/${apiTarget}-config`);
       if (!res.ok) {
         throw new Error('Failed to fetch configuration');
       }
       const parsed = await res.json();
-      const importedConfig: ProfileConfig = {
-        agents: parsed.agents || {},
-        categories: parsed.categories,
-      };
+      const importedConfig: ProfileConfig =
+        apiTarget === 'omo'
+          ? {
+              agents: parsed.agents || {},
+              categories: parsed.categories,
+            }
+          : {
+              modelRoles: parsed.modelRoles || {},
+              fallbackChains: parsed.fallbackChains,
+              modelFallback: parsed.modelFallback,
+            } as unknown as ProfileConfig;
       setConfig(importedConfig);
       setToast({ type: 'success', message: 'Configuration imported successfully' });
     } catch {
@@ -121,8 +131,14 @@ export function ProfileEditor({
     setToast({ type: 'success', message: `Profile ${isEditing ? 'updated' : 'created'} successfully` });
   };
 
+  const isOmo = apiTarget === 'omo';
   const agentCount = Object.keys(config.agents || {}).length;
   const categoryCount = Object.keys(config.categories || {}).length;
+  const roleCount = Object.keys((config as Record<string, unknown>).modelRoles || {}).length;
+  const chainCount = Object.keys((config as Record<string, unknown>).fallbackChains || {}).length;
+  const configSummary = isOmo
+    ? `${agentCount} agent${agentCount !== 1 ? 's' : ''}, ${categoryCount} categor${categoryCount !== 1 ? 'ies' : 'y'} configured`
+    : `${roleCount} role${roleCount !== 1 ? 's' : ''}, ${chainCount} fallback chain${chainCount !== 1 ? 's' : ''} configured`;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" aria-label="Profile editor form">
@@ -318,7 +334,9 @@ export function ProfileEditor({
           )}
         </div>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Import agent and category configurations from your current settings, or reset to the profile&apos;s original values.
+          {isOmo
+            ? 'Import agent and category configurations from your current settings, or reset to the profile\'s original values.'
+            : 'Import role and fallback chain assignments from your current settings, or reset to the profile\'s original values.'}
         </p>
       </div>
 
@@ -335,7 +353,7 @@ export function ProfileEditor({
               {watchedName || 'Untitled Profile'}
             </p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {agentCount} agent{agentCount !== 1 ? 's' : ''}, {categoryCount} categor{categoryCount !== 1 ? 'ies' : 'y'} configured
+              {configSummary}
             </p>
           </div>
         </div>
@@ -356,7 +374,63 @@ export function ProfileEditor({
             aria-hidden="true"
           />
         </button>
-        {isConfigExpanded && (
+        {isConfigExpanded && !isOmo && (
+          <div className="border-t border-zinc-200 dark:border-zinc-700 p-4 space-y-4">
+            <div>
+              <h5 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
+                Model Roles ({roleCount})
+              </h5>
+              {roleCount === 0 ? (
+                <p className="text-sm text-zinc-400 dark:text-zinc-500 italic">
+                  No roles configured
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {Object.entries(((config as Record<string, unknown>).modelRoles || {}) as Record<string, string>).map(([name, model]) => (
+                    <li
+                      key={name}
+                      className="text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-2"
+                    >
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100 min-w-[80px]">
+                        {name}
+                      </span>
+                      <span className="text-zinc-400">→</span>
+                      <span className="text-zinc-600 dark:text-zinc-400">{model}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <h5 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
+                Fallback Chains ({chainCount})
+              </h5>
+              {chainCount === 0 ? (
+                <p className="text-sm text-zinc-400 dark:text-zinc-500 italic">
+                  No fallback chains configured
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {Object.entries(((config as Record<string, unknown>).fallbackChains || {}) as Record<string, string[]>).map(([name, chain]) => (
+                    <li
+                      key={name}
+                      className="text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-2"
+                    >
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100 min-w-[80px]">
+                        {name}
+                      </span>
+                      <span className="text-zinc-400">→</span>
+                      <span className="text-zinc-600 dark:text-zinc-400">{chain.join(' → ')}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        {isConfigExpanded && isOmo && (
           <div className="border-t border-zinc-200 dark:border-zinc-700 p-4 space-y-4">
             <div>
               <h5 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">

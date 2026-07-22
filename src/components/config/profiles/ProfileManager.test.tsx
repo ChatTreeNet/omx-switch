@@ -48,7 +48,7 @@ describe('ProfileManager', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <ProfileManager />
+        <ProfileManager apiTarget="omo" />
       </QueryClientProvider>
     );
 
@@ -71,7 +71,7 @@ describe('ProfileManager', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <ProfileManager />
+        <ProfileManager apiTarget="omo" />
       </QueryClientProvider>
     );
 
@@ -110,7 +110,7 @@ describe('ProfileManager', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <ProfileManager />
+        <ProfileManager apiTarget="omo" />
       </QueryClientProvider>
     );
 
@@ -122,7 +122,7 @@ describe('ProfileManager', () => {
     await user.click(applyButtons[0]);
 
     await waitFor(() => {
-      expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['profiles'] });
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['profiles', 'omo'] });
       expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['config', 'omo'] });
     });
   });
@@ -141,7 +141,7 @@ describe('ProfileManager', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <ProfileManager />
+        <ProfileManager apiTarget="omo" />
       </QueryClientProvider>
     );
 
@@ -183,7 +183,7 @@ describe('ProfileManager', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <ProfileManager />
+        <ProfileManager apiTarget="omo" />
       </QueryClientProvider>
     );
 
