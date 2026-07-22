@@ -38,7 +38,9 @@ jobs:
           ls -la .next/ || echo "No .next directory"
           ls -la .next/static/ || echo "No static directory"
           mkdir -p .next/standalone/.next
-          cp -r public .next/standalone/
+          if [ -d "public" ]; then
+            cp -r public .next/standalone/
+          fi
           if [ -d ".next/static" ]; then
             cp -r .next/static .next/standalone/.next/
           fi
@@ -47,20 +49,20 @@ jobs:
       - name: Extract version info
         id: version
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          if [[ $TAG =~ - ]]; then
-            echo "is_prerelease=true" >> $GITHUB_OUTPUT
-            if [[ $TAG =~ -alpha ]]; then
-              echo "dist_tag=alpha" >> $GITHUB_OUTPUT
-            elif [[ $TAG =~ -beta ]]; then
-              echo "dist_tag=beta" >> $GITHUB_OUTPUT
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG" == *-* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            if [[ "$TAG" == *-alpha* ]]; then
+              echo "dist_tag=alpha" >> "$GITHUB_OUTPUT"
+            elif [[ "$TAG" == *-beta* ]]; then
+              echo "dist_tag=beta" >> "$GITHUB_OUTPUT"
             else
-              echo "dist_tag=next" >> $GITHUB_OUTPUT
+              echo "dist_tag=next" >> "$GITHUB_OUTPUT"
             fi
           else
-            echo "is_prerelease=false" >> $GITHUB_OUTPUT
-            echo "dist_tag=latest" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create GitHub Release
