@@ -5,35 +5,11 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const port = process.env.PORT || '3456';
-
-const nodeRuntimeFlag = '--serve';
-const runtimeRoleEnvVar = 'VIBEPULSE_RUNTIME_ROLE';
-
-function resolveRuntimeMode(argv) {
-  if (!Array.isArray(argv)) {
-    throw new TypeError('Runtime arguments must be provided as an array.');
-  }
-
-  if (argv.length === 0) {
-    return { role: 'hub' };
-  }
-
-  if (argv.length === 1 && argv[0] === nodeRuntimeFlag) {
-    return { role: 'node' };
-  }
-
-  const renderedArgs = argv.length > 0 ? argv.join(' ') : '(none)';
-  throw new Error(`Unsupported arguments: ${renderedArgs}. Usage: vibepulse [${nodeRuntimeFlag}]`);
-}
+const port = process.env.PORT || '3457';
 
 async function main() {
-  const runtimeMode = resolveRuntimeMode(process.argv.slice(2));
-  const runtimeRole = runtimeMode.role;
-
-  console.log(`🚀 Starting VibePulse ${runtimeRole} on port ${port}...`);
-  console.log(`🛰️ Runtime role: ${runtimeRole}`);
-  console.log(`📊 Open http://localhost:${port} to view the dashboard`);
+  console.log(`🚀 Starting OMX Switch on port ${port}...`);
+  console.log(`📊 Open http://localhost:${port} to view the model switcher`);
   console.log('');
 
   // Standalone mode server.js
@@ -54,8 +30,8 @@ async function main() {
     command = nextBin;
     args = ['start', '-p', port];
   } else {
-    console.error('❌ VibePulse is not built. Please install from npm or build locally:');
-    console.error('   npm install -g vibepulse');
+    console.error('❌ OMX Switch is not built. Please install from npm or build locally:');
+    console.error('   npm install -g omx-switch');
     process.exit(1);
   }
 
@@ -66,12 +42,11 @@ async function main() {
       ...process.env,
       PORT: port,
       HOSTNAME: '0.0.0.0',
-      [runtimeRoleEnvVar]: runtimeRole,
     }
   });
 
   proc.on('error', (err) => {
-    console.error('Failed to start VibePulse:', err.message);
+    console.error('Failed to start OMX Switch:', err.message);
     process.exit(1);
   });
 

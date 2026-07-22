@@ -1,4 +1,4 @@
-import type { Profile, ProfileConfig } from '@/types/opencodeConfig';
+import type { Profile, ProfileConfig } from '@/types/omoConfig';
 
 export interface ExportedProfileFile {
   version: 1;

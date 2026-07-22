@@ -188,33 +188,36 @@ describe('profile storage schema handling', () => {
     const balanced = await storage.readProfileConfig('balanced');
 
     expect(balanced.agents.hephaestus).toMatchObject({
-      model: 'openai/gpt-5.4',
+      model: 'openai/gpt-5.5',
       variant: 'medium',
     });
     expect((balanced.agents as Record<string, unknown>).hepheastus).toBeUndefined();
     expect(balanced.agents.librarian).toMatchObject({
-      model: 'minimax-m2.7',
+      model: 'openai/gpt-5.4-mini-fast',
     });
     expect(balanced.agents.explore).toMatchObject({
-      model: 'grok-code-fast-1',
+      model: 'openai/gpt-5.4-mini-fast',
     });
     expect(balanced.agents['multimodal-looker']).toMatchObject({
-      model: 'openai/gpt-5.4',
+      model: 'openai/gpt-5.5',
       variant: 'medium',
+    });
+    expect(balanced.agents['sisyphus-junior']).toMatchObject({
+      model: 'anthropic/claude-sonnet-4-6',
     });
     expect(balanced.categories?.quick).toMatchObject({
       model: 'openai/gpt-5.4-mini',
     });
     expect(balanced.categories?.ultrabrain).toMatchObject({
-      model: 'openai/gpt-5.4',
+      model: 'openai/gpt-5.5',
       variant: 'xhigh',
     });
     expect(balanced.categories?.deep).toMatchObject({
-      model: 'openai/gpt-5.4',
+      model: 'openai/gpt-5.5',
       variant: 'medium',
     });
     expect(balanced.categories?.['unspecified-high']).toMatchObject({
-      model: 'anthropic/claude-opus-4-6',
+      model: 'anthropic/claude-opus-4-7',
       variant: 'max',
     });
   });

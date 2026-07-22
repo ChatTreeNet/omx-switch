@@ -4,7 +4,7 @@ import {
   getProfileById,
   setActiveProfileId,
 } from '@/lib/profiles/storage';
-import { mergeConfig, readConfig, writeConfig } from '@/lib/opencodeConfig';
+import { mergeConfig, readConfig, writeConfig } from '@/lib/omoConfig';
 
 interface RouteParams {
   params: Promise<{ id: string }>;

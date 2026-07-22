@@ -2,42 +2,18 @@
 
 const { spawn } = require('child_process');
 
-const runtimeRoleEnvVar = 'VIBEPULSE_RUNTIME_ROLE';
-const nodeRuntimeFlag = '--serve';
-const defaultPort = process.env.PORT || '3456';
-
-function parseRuntimeArgs(argv) {
-  if (!Array.isArray(argv)) {
-    throw new TypeError('Runtime arguments must be provided as an array.');
-  }
-
-  if (argv.length === 0) {
-    return { runtimeRole: 'hub', nextArgs: [] };
-  }
-
-  const [firstArg, ...restArgs] = argv;
-  if (firstArg === 'hub' || firstArg === 'node') {
-    return { runtimeRole: firstArg, nextArgs: restArgs };
-  }
-
-  if (firstArg === nodeRuntimeFlag) {
-    return { runtimeRole: 'node', nextArgs: restArgs };
-  }
-
-  return { runtimeRole: 'hub', nextArgs: argv };
-}
+const defaultPort = process.env.PORT || '3457';
 
 function main() {
   const [, , ...runtimeArgs] = process.argv;
-  const { runtimeRole, nextArgs } = parseRuntimeArgs(runtimeArgs);
+  // Legacy role flags (hub/node/--serve) are accepted but ignored: the app
+  // always runs as a single local Next.js dev server.
+  const nextArgs = runtimeArgs.filter((arg) => arg !== 'hub' && arg !== 'node' && arg !== '--serve');
   const nextBin = require.resolve('next/dist/bin/next');
 
   const child = spawn(process.execPath, [nextBin, 'dev', '-p', defaultPort, ...nextArgs], {
     stdio: 'inherit',
-    env: {
-      ...process.env,
-      [runtimeRoleEnvVar]: runtimeRole,
-    },
+    env: { ...process.env },
   });
 
   child.on('error', (error) => {

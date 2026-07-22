@@ -1,134 +1,91 @@
-import type { ReactNode } from 'react';
-import * as tlReact from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-type RenderFn = (ui: ReactNode) => unknown;
-type WaitForFn = (callback: () => void | Promise<void>) => Promise<void>;
-type RoleQueryOptions = { name?: string | RegExp };
-type ScreenLike = {
-  getByRole: (role: string, options?: RoleQueryOptions) => HTMLElement;
-  queryByRole: (role: string, options?: RoleQueryOptions) => HTMLElement | null;
-};
-
-const tlReactCompat = tlReact as unknown as {
-  render: RenderFn;
-  screen: ScreenLike;
-  waitFor: WaitForFn;
-};
-
-const render = tlReactCompat.render;
-const screen = tlReactCompat.screen;
-const waitFor = tlReactCompat.waitFor;
-const mockFetch = vi.fn();
-const mockUseOpencodeSync = vi.fn();
-const mockSetActiveFilter = vi.fn();
-
-vi.mock('@/hooks/useOpencodeSync', () => ({
-  useOpencodeSync: () => mockUseOpencodeSync(),
-}));
-
-vi.mock('@/hooks/useHostSources', () => ({
-  useHostSources: () => ({
-    enabledSources: [{ hostId: 'local', hostLabel: 'Local', hostKind: 'local' }],
-    activeFilter: 'all',
-    setActiveFilter: mockSetActiveFilter,
-  }),
-}));
-
-vi.mock('@/components/KanbanBoard', () => ({
-  KanbanBoard: () => <div data-testid="kanban-board" />,
-}));
-
-vi.mock('@/components/ErrorBoundary', () => ({
-  ErrorBoundary: ({ children }: { children: ReactNode }) => <>{children}</>,
-}));
-
-vi.mock('@/components/opencode-config/ConfigButton', () => ({
-  ConfigButton: ({ onClick }: { onClick: () => void }) => <button type="button" onClick={onClick}>Config</button>,
-}));
-
-vi.mock('@/components/opencode-config/FullscreenConfigPanel', () => ({
-  FullscreenConfigPanel: () => null,
-}));
-
-vi.mock('@/components/host-config/HostManagerDialog', () => ({
-  HostManagerDialog: () => null,
-}));
-
-vi.mock('@/lib/notificationSound', () => ({
-  isMuted: vi.fn(() => false),
-  subscribeMuted: vi.fn(() => () => {}),
-  playToggleFeedbackSound: vi.fn(),
-  setMuted: vi.fn(),
-  unlockAudio: vi.fn(),
-}));
-
 import Home from './page';
 
-function createResponse(status: number, body?: unknown) {
-  return {
+// The workspace is covered by its own component tests; keep the page test focused on wiring
+vi.mock('@/components/config/ConfigWorkspace', () => ({
+  ConfigWorkspace: ({ apiTarget }: { apiTarget: string }) => (
+    <div data-testid="config-workspace" data-target={apiTarget} />
+  ),
+}));
+
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
     status,
-    json: async () => body,
-  };
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
-describe('src/app/page.tsx - Runtime Role Detection', () => {
+function renderPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(<QueryClientProvider client={queryClient}><Home /></QueryClientProvider>);
+}
+
+function mockBackend({ needsSync = false }: { needsSync?: boolean } = {}) {
+  mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === '/api/omo-sync') {
+      return jsonResponse({ needsSync, daysSincePush: needsSync ? 90 : 10, lastPush: '2026-01-01T00:00:00Z' });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+}
+
+describe('Home page', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.stubGlobal('fetch', mockFetch);
+    mockFetch.mockReset();
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    cleanup();
   });
 
-  it('detects node mode when /api/nodes returns 404 with node mode error', async () => {
-    mockFetch.mockResolvedValue(createResponse(404, { error: 'Route unavailable in node mode' }));
+  it('renders the OMO workspace by default', () => {
+    mockBackend();
+    renderPage();
 
-    render(<Home />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /VibePulse \(Node\)/i })).toBeTruthy();
-    });
-
-    expect(screen.queryByRole('button', { name: 'Nodes' })).toBeNull();
-    expect(mockFetch).toHaveBeenCalledWith('/api/nodes');
+    expect(screen.getByRole('heading', { name: 'OMX Switch' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'OMO' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('config-workspace')).toHaveAttribute('data-target', 'omo');
   });
 
-  it('detects hub mode when /api/nodes returns 200', async () => {
-    mockFetch.mockResolvedValue(createResponse(200, { nodes: [] }));
+  it('switches the workspace to OMP when the OMP tab is selected', async () => {
+    mockBackend();
+    const user = userEvent.setup();
+    renderPage();
 
-    render(<Home />);
+    await user.click(screen.getByRole('tab', { name: 'OMP' }));
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /VibePulse$/i })).toBeTruthy();
-    });
-
-    expect(screen.getByRole('button', { name: 'Nodes' })).toBeTruthy();
-    expect(mockFetch).toHaveBeenCalledWith('/api/nodes');
+    expect(screen.getByRole('tab', { name: 'OMP' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('config-workspace')).toHaveAttribute('data-target', 'omp');
   });
 
-  it('detects hub mode when /api/nodes returns non-404 status', async () => {
-    mockFetch.mockResolvedValue(createResponse(500, { error: 'Server error' }));
-
-    render(<Home />);
+  it('shows the sync banner when the OMO upstream is stale', async () => {
+    mockBackend({ needsSync: true });
+    renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /VibePulse$/i })).toBeTruthy();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'OMO upstream has not been updated in 90 days. Consider syncing.'
+      );
     });
-
-    expect(screen.getByRole('button', { name: 'Nodes' })).toBeTruthy();
   });
 
-  it('defaults to hub mode on network error', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'));
-
-    render(<Home />);
+  it('hides the sync banner when the OMO upstream is fresh', async () => {
+    mockBackend({ needsSync: false });
+    renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /VibePulse$/i })).toBeTruthy();
+      expect(mockFetch).toHaveBeenCalledWith('/api/omo-sync');
     });
 
-    expect(screen.getByRole('button', { name: 'Nodes' })).toBeTruthy();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

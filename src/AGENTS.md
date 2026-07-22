@@ -3,39 +3,41 @@
 **Scope:** `src/`
 
 ## OVERVIEW
-`src/` contains the application runtime (Next.js App Router), UI modules, realtime hooks, shared utilities, and the package export surface.
+`src/` contains the OMX Switch runtime: a single-page Next.js App Router GUI that
+switches the `default` agent model for OMO (Oh My OpenAgent) and OMP (Oh My Pi),
+plus the API routes that read/write their config files and list CLI models.
 
 ## STRUCTURE
 ```text
 src/
-├── app/                 # Next.js page/layout + API routes
-├── components/          # board UI and config experience
-├── hooks/               # realtime stream/cache integration
-├── lib/                 # discovery, transforms, config/profile IO
+├── app/                 # page/layout + API routes
+├── components/          # config workspace, ModelSelector, SyncStatus, QueryProvider
+├── lib/                 # config file IO (omoConfig/ompConfig), validation, CLI models, profiles
 ├── test/                # test bootstrap (`setup.ts`)
-├── types/               # domain contracts
-└── index.ts             # publishable library exports
+├── types/               # config domain contracts (omoConfig.ts)
+└── index.ts             # empty; no library surface
 ```
 
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Main page shell | `src/app/page.tsx` | top-level filters, mute, config panel state |
-| Backend API behavior | `src/app/api/` | route handlers and OpenCode integration |
-| Board data + degraded UX | `src/components/KanbanBoard.tsx` | polling, stale snapshot, errors |
-| Realtime event sync | `src/hooks/useOpencodeSync.ts` | SSE events + optimistic cache updates |
-| Session/card transforms | `src/lib/transform.ts` | source sessions -> kanban cards |
-| Library public surface | `src/index.ts` | only exported runtime API for package consumers |
+| Page shell | `src/app/page.tsx` | OMO/OMP target tabs + SyncStatus + ConfigWorkspace |
+| Config workspace | `src/components/config/ConfigWorkspace.tsx` | agents sidebar + form, categories, profiles tabs |
+| Model dropdown | `src/components/ModelSelector.tsx` | Radix select, provider grouping, search |
+| OMO config IO | `src/lib/omoConfig.ts` | `~/.config/opencode/oh-my-openagent.jsonc` |
+| OMP config IO | `src/lib/ompConfig.ts` | `~/.omp/agent/config.yml` (YAML) |
+| Shared field validation | `src/lib/configValidation.ts` | secret filtering + agent/category validators |
+| CLI model listing | `src/lib/cliModels.ts` | exec plumbing for `opencode models` / `omp models --json` |
 
 ## CONVENTIONS
 - Keep Next.js route handlers under `src/app/api/**/route.ts`; avoid ad-hoc API helper entrypoints.
 - Keep tests co-located (`*.test.ts`, `*.test.tsx`); shared test runtime setup stays in `src/test/setup.ts`.
-- Keep package-facing exports centralized in `src/index.ts`.
-- Keep cross-module imports on `@/` alias instead of deep relative paths when crossing feature boundaries.
-- Keep profile/config persistence logic in `src/lib/profiles` and `src/lib/opencodeConfig.ts`, not in UI components.
+- Keep cross-module imports on the `@/` alias.
+- Keep config persistence logic in `src/lib/omoConfig.ts` / `src/lib/ompConfig.ts`, not in UI components.
+- OMO and OMP API routes are structural mirrors; shared behavior lives in `src/lib/configValidation.ts` and `src/lib/cliModels.ts`, not in copy-pasted route code.
 
 ## ANTI-PATTERNS
-- Do not add new package exports outside `src/index.ts`; `build:lib` only compiles from that entry.
-- Do not bypass shared transform/discovery utilities by duplicating logic in page/components.
-- Do not keep extending known hotspots (`src/app/api/sessions/route.ts`, `src/components/KanbanBoard.tsx`) without extracting helpers.
+- Do not accept secret-like config keys in `/api/omo-config` or `/api/omp-config`; sensitive field names are explicitly blocked.
+- Do not add unknown agent/category fields to config update payloads; validators enforce per-field rules.
+- Do not reintroduce session monitoring, kanban, or host-management code; this app is an OMO/OMP model configuration GUI.
 - Do not move tests to a separate global test tree; this codebase relies on co-location for context.

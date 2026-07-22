@@ -3,8 +3,8 @@ import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { parse, stringify } from 'comment-json';
-import { OH_MY_OPENAGENT_CONFIG_SCHEMA } from '../opencodeConfig';
-import type { AgentConfig, CategoryConfig, ProfileConfig as SharedProfileConfig } from '@/types/opencodeConfig';
+import { OH_MY_OPENAGENT_CONFIG_SCHEMA } from '../omoConfig';
+import type { AgentConfig, CategoryConfig, ProfileConfig as SharedProfileConfig } from '@/types/omoConfig';
 
 export const PROFILES_DIR = join(homedir(), '.config', 'opencode', 'profiles');
 export const PROFILE_INDEX_PATH = join(PROFILES_DIR, 'index.json');
@@ -45,36 +45,37 @@ const BUILTIN_PROFILES: Profile[] = [
   },
 ];
 
+// First-choice model assignments mirror oh-my-openagent v4.15.1
+// AGENT_MODEL_REQUIREMENTS / CATEGORY_MODEL_REQUIREMENTS (dist/cli-node).
 const BUILTIN_PROFILE_CONFIGS: Record<string, ProfileConfig> = {
   balanced: {
     agents: {
       sisyphus: {
-        model: 'anthropic/claude-opus-4-6',
+        model: 'anthropic/claude-opus-4-7',
         variant: 'max',
         temperature: 0.2,
         top_p: 0.9,
       },
       oracle: {
-        model: 'openai/gpt-5.4',
+        model: 'openai/gpt-5.5',
         variant: 'high',
         temperature: 0.2,
         top_p: 0.9,
       },
       prometheus: {
-        model: 'anthropic/claude-opus-4-6',
+        model: 'anthropic/claude-opus-4-7',
         variant: 'max',
         temperature: 0.2,
         top_p: 0.9,
       },
       metis: {
-        model: 'anthropic/claude-opus-4-6',
-        variant: 'max',
+        model: 'anthropic/claude-sonnet-4-6',
         temperature: 0.2,
         top_p: 0.9,
       },
       momus: {
-        model: 'openai/gpt-5.4',
-        variant: 'medium',
+        model: 'openai/gpt-5.5',
+        variant: 'xhigh',
         temperature: 0.2,
         top_p: 0.9,
       },
@@ -84,30 +85,29 @@ const BUILTIN_PROFILE_CONFIGS: Record<string, ProfileConfig> = {
         top_p: 0.9,
       },
       hephaestus: {
-        model: 'openai/gpt-5.4',
+        model: 'openai/gpt-5.5',
         variant: 'medium',
         temperature: 0.2,
         top_p: 0.9,
       },
       librarian: {
-        model: 'minimax-m2.7',
+        model: 'openai/gpt-5.4-mini-fast',
         temperature: 0.3,
         top_p: 0.9,
       },
       explore: {
-        model: 'grok-code-fast-1',
+        model: 'openai/gpt-5.4-mini-fast',
         temperature: 0.1,
         top_p: 0.9,
       },
       'multimodal-looker': {
-        model: 'openai/gpt-5.4',
+        model: 'openai/gpt-5.5',
         variant: 'medium',
         temperature: 0.2,
         top_p: 0.9,
       },
-      'frontend-ui-ux': {
-        model: 'google/gemini-3.1-pro',
-        variant: 'high',
+      'sisyphus-junior': {
+        model: 'anthropic/claude-sonnet-4-6',
         temperature: 0.3,
         top_p: 0.9,
       },
@@ -118,11 +118,11 @@ const BUILTIN_PROFILE_CONFIGS: Record<string, ProfileConfig> = {
         variant: 'high',
       },
       ultrabrain: {
-        model: 'openai/gpt-5.4',
+        model: 'openai/gpt-5.5',
         variant: 'xhigh',
       },
       deep: {
-        model: 'openai/gpt-5.4',
+        model: 'openai/gpt-5.5',
         variant: 'medium',
       },
       artistry: {
@@ -138,7 +138,7 @@ const BUILTIN_PROFILE_CONFIGS: Record<string, ProfileConfig> = {
         temperature: 0.2,
       },
       'unspecified-high': {
-        model: 'anthropic/claude-opus-4-6',
+        model: 'anthropic/claude-opus-4-7',
         variant: 'max',
         temperature: 0.2,
       },

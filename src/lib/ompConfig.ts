@@ -1,0 +1,67 @@
+import { readFile, writeFile } from 'fs/promises';
+import { existsSync, mkdirSync } from 'fs';
+import { dirname, join } from 'path';
+import { homedir } from 'os';
+import { parse, stringify } from 'yaml';
+import { isPlainObject } from '@/lib/configValidation';
+
+export const CONFIG_DIR = join(homedir(), '.omp', 'agent');
+export const CONFIG_PATH = join(CONFIG_DIR, 'config.yml');
+
+/**
+ * OMP (Oh My Pi) config. Only modelRoles is typed; every other setting is
+ * preserved opaquely so writes never drop fields the CLI manages.
+ */
+export interface OmpConfig {
+  modelRoles?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+export function detectConfig(configPath: string = CONFIG_PATH): boolean {
+  try {
+    return existsSync(configPath);
+  } catch {
+    return false;
+  }
+}
+
+export async function readConfig(configPath: string = CONFIG_PATH): Promise<OmpConfig> {
+  let content: string;
+  try {
+    content = await readFile(configPath, 'utf-8');
+  } catch {
+    // Missing or unreadable file is treated as "no config"
+    return {};
+  }
+
+  try {
+    const config: unknown = parse(content);
+    if (config === null) {
+      return {};
+    }
+    if (!isPlainObject(config)) {
+      throw new Error('config root must be a mapping');
+    }
+    return config;
+  } catch (error) {
+    // A malformed file must surface loudly: callers would otherwise merge
+    // into {} and silently overwrite the user's recoverable config
+    throw new Error(`Failed to parse OMP config at ${configPath}: ${error}`);
+  }
+}
+
+export async function writeConfig(
+  config: OmpConfig,
+  configPath: string = CONFIG_PATH
+): Promise<void> {
+  try {
+    const configDir = dirname(configPath);
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
+
+    await writeFile(configPath, stringify(config), 'utf-8');
+  } catch (error) {
+    throw new Error(`Failed to write OMP config: ${error}`);
+  }
+}
