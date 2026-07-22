@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readProfileIndexStrict, writeProfileConfig, writeProfileIndex } from '@/lib/profiles/storage';
 import { parseImportedProfileFile } from '@/lib/profiles/share';
-import type { Profile } from '@/types/opencodeConfig';
+import type { Profile } from '@/types/omoConfig';
 
 class ImportBadRequestError extends Error {}
 

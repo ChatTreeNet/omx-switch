@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VibePulse",
-  description: "Real-time dashboard for monitoring OpenCode sessions",
+  title: "OMX Switch",
+  description: "Model switcher for OMO and OMP",
 };
 
 export default function RootLayout({

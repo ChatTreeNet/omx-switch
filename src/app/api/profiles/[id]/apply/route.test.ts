@@ -6,8 +6,8 @@ vi.mock('@/lib/profiles/storage', () => ({
   setActiveProfileId: vi.fn(),
 }));
 
-vi.mock('@/lib/opencodeConfig', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/opencodeConfig')>('@/lib/opencodeConfig');
+vi.mock('@/lib/omoConfig', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/omoConfig')>('@/lib/omoConfig');
   return {
     ...actual,
     readConfig: vi.fn(),
@@ -20,7 +20,7 @@ import {
   readProfileConfig,
   setActiveProfileId,
 } from '@/lib/profiles/storage';
-import { readConfig, writeConfig } from '@/lib/opencodeConfig';
+import { readConfig, writeConfig } from '@/lib/omoConfig';
 import { createExportedProfileFile, parseImportedProfileFile } from '@/lib/profiles/share';
 import { POST } from './route';
 

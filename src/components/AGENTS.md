@@ -3,40 +3,39 @@
 **Scope:** `src/components/`
 
 ## OVERVIEW
-`src/components/` contains the kanban board experience, shared UI primitives, and the Oh My OpenAgent configuration interface (agents/categories/profiles).
+`src/components/` contains the OMX Switch UI: the config workspace (agents,
+categories, profiles) shared by OMO and OMP, the Radix model dropdown, and the
+OMO upstream sync banner.
 
 ## STRUCTURE
 ```text
 src/components/
-├── KanbanBoard.tsx                 # board orchestration + fetch/degraded state
-├── ProjectCard.tsx                 # per-project group renderer
-├── SessionCard.tsx                 # session card presentation
-├── SessionList.tsx                 # list-style view support
-├── opencode-config/                # full Oh My OpenAgent config UX
-│   ├── categories/                 # category form/list/manager
-│   └── profiles/                   # profile editor/list/manager/card
-└── ui/                             # small reusable primitives
+├── config/                     # target-parameterized config workspace
+│   ├── ConfigWorkspace.tsx     # agents sidebar + form, categories, profiles tabs
+│   ├── AgentConfigForm.tsx     # full per-agent editing form (react-hook-form)
+│   ├── categories/             # CategoriesManager/CategoryConfigForm/CategoriesList
+│   └── profiles/               # ProfileManager/ProfileEditor/ProfileList/ProfileCard (OMO only)
+├── ModelSelector.tsx           # Radix select: provider grouping, search, error/retry
+├── SyncStatus.tsx              # /api/omo-sync warning banner (hidden when fresh)
+├── QueryProvider.tsx           # TanStack Query client provider
+└── ModelSelector.test.tsx
 ```
 
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Board fetch + fallback behavior | `src/components/KanbanBoard.tsx` | query polling, stale snapshot merge, retry UX |
-| Project grouping + card actions | `src/components/ProjectCard.tsx` | grouped rendering and per-project controls |
-| Config panel composition | `src/components/opencode-config/ConfigPanel.tsx`, `src/components/opencode-config/FullscreenConfigPanel.tsx` | tabs + panel orchestration |
-| Agent model editing | `src/components/opencode-config/AgentConfigForm.tsx` | model/variant/temp/top_p editing flow |
-| Category workflow | `src/components/opencode-config/categories/*` | category list + editor rules |
-| Profile workflow | `src/components/opencode-config/profiles/*` | CRUD, apply/import/export surface |
+| Workspace tabs / agent sidebar | `src/components/config/ConfigWorkspace.tsx` | dynamic agent list from config; profiles tab is OMO-only |
+| Per-agent save flow | `src/components/config/AgentConfigForm.tsx` | POST `{ agents: { [name]: payload } }` to `/api/{target}-config` |
+| Dropdown behavior | `src/components/ModelSelector.tsx` | fetches `/api/{target}-models`; swallows Radix's spurious `onValueChange('')` |
+| Sync banner | `src/components/SyncStatus.tsx` | renders only when `needsSync` is true |
 
 ## CONVENTIONS
-- Board-level data fetching lives in `KanbanBoard.tsx` and is backed by TanStack Query caches.
-- Config subfeatures are split by domain (`categories/`, `profiles/`) with manager/list/editor-style components.
-- UI tests are co-located with components (`*.test.tsx`).
-- Session display transforms are delegated to `src/lib/transform.ts` rather than duplicated in child components.
-- Config mutations rely on API endpoints plus query invalidation instead of local-only state divergence.
+- Components are client components (`'use client'`) and use TanStack Query for all fetches; query keys are `['config', target]` and `['models', target]`; mutations invalidate the matching key.
+- `apiTarget: 'omo' | 'omp'` (exported from `ModelSelector.tsx`) is the single discriminator between the two targets; do not fork components per target.
+- Profiles are an OMO-only concept: profiles components hit `/api/profiles` and invalidate `['config', 'omo']`.
+- UI tests are co-located (`*.test.tsx`); mock `ModelSelector` with a plain `<select>` when Radix pointer behavior is not under test.
 
 ## ANTI-PATTERNS
-- Do not bypass `KanbanBoard` degraded-mode snapshot logic when touching session-fetch UX.
-- Do not duplicate waiting/status merge logic from realtime hooks inside multiple card components.
-- Do not inline heavy business validation into presentational components; keep validation in API/lib layers.
-- Do not expand `opencode-config` with one-off files at root when feature folders (`categories`, `profiles`) already fit.
+- Do not inline config validation in components; the API routes are the validation gate.
+- Do not bypass TanStack Query with ad-hoc `useEffect` fetches.
+- Do not hardcode agent lists from config files; the sidebar derives its list from the loaded config (plus well-known OMO metadata).

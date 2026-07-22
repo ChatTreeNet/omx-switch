@@ -3,8 +3,8 @@ import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { parse, stringify } from 'comment-json';
-import { OH_MY_OPENAGENT_CONFIG_SCHEMA } from '../opencodeConfig';
-import type { AgentConfig, CategoryConfig, ProfileConfig as SharedProfileConfig } from '@/types/opencodeConfig';
+import { OH_MY_OPENAGENT_CONFIG_SCHEMA } from '../omoConfig';
+import type { AgentConfig, CategoryConfig, ProfileConfig as SharedProfileConfig } from '@/types/omoConfig';
 
 export const PROFILES_DIR = join(homedir(), '.config', 'opencode', 'profiles');
 export const PROFILE_INDEX_PATH = join(PROFILES_DIR, 'index.json');
