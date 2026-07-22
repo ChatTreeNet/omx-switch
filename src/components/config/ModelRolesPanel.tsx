@@ -10,21 +10,27 @@ interface RoleDefinition {
   key: string;
   name: string;
   description: string;
+  /** What an unset role resolves to, per pi-coding-agent model-resolver */
+  unsetNote: string;
 }
 
 // Built-in roles from @oh-my-pi/pi-coding-agent model-roles; custom roles
-// found in config.yml are appended below these.
+// found in config.yml are appended below these. unsetNote mirrors the real
+// resolution semantics in src/config/model-resolver.ts + priority.json:
+// only smol/slow/designer inherit the default role's model; advisor reuses
+// the slow chain (never default); tiny reuses the smol chain; other roles
+// have no configured fallback.
 const BUILT_IN_ROLES: RoleDefinition[] = [
-  { key: 'default', name: 'Default', description: 'Primary model for the main agent' },
-  { key: 'smol', name: 'Smol', description: 'Fast/cheap model for lightweight tasks' },
-  { key: 'slow', name: 'Slow', description: 'Reasoning model for thorough analysis' },
-  { key: 'plan', name: 'Plan', description: 'Model for architectural planning' },
-  { key: 'vision', name: 'Vision', description: 'Model for image analysis' },
-  { key: 'designer', name: 'Designer', description: 'Model for design work' },
-  { key: 'commit', name: 'Commit', description: 'Model for commit message generation' },
-  { key: 'task', name: 'Task', description: 'Model for spawned subagents' },
-  { key: 'advisor', name: 'Advisor', description: 'Passive reviewer that injects notes' },
-  { key: 'tiny', name: 'Tiny', description: 'Smallest model for trivial operations' },
+  { key: 'default', name: 'Default', description: 'Primary model for the main agent', unsetNote: 'Not set' },
+  { key: 'smol', name: 'Smol', description: 'Fast/cheap model for lightweight tasks', unsetNote: 'Not set (inherits default)' },
+  { key: 'slow', name: 'Slow', description: 'Reasoning model for thorough analysis', unsetNote: 'Not set (inherits default)' },
+  { key: 'plan', name: 'Plan', description: 'Model for architectural planning', unsetNote: 'Not set' },
+  { key: 'vision', name: 'Vision', description: 'Model for image analysis', unsetNote: 'Not set' },
+  { key: 'designer', name: 'Designer', description: 'Model for design work', unsetNote: 'Not set (inherits default)' },
+  { key: 'commit', name: 'Commit', description: 'Model for commit message generation', unsetNote: 'Not set' },
+  { key: 'task', name: 'Task', description: 'Model for spawned subagents', unsetNote: 'Not set' },
+  { key: 'advisor', name: 'Advisor', description: 'Passive reviewer that injects notes', unsetNote: "Not set (uses slow's chain)" },
+  { key: 'tiny', name: 'Tiny', description: 'Smallest model for trivial operations', unsetNote: "Not set (uses smol's chain)" },
 ];
 
 export function ModelRolesPanel() {
@@ -86,7 +92,7 @@ export function ModelRolesPanel() {
     const extras = Array.from(custom)
       .filter((key) => !known.has(key))
       .sort()
-      .map((key) => ({ key, name: key, description: 'Custom role' }));
+      .map((key) => ({ key, name: key, description: 'Custom role', unsetNote: 'Not set' }));
     return [...BUILT_IN_ROLES, ...extras];
   }, [configuredRoles, configuredChains]);
 
@@ -239,8 +245,9 @@ export function ModelRolesPanel() {
       </div>
 
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Assign a model to each OMP role. Unassigned roles fall back to the default model.
-        Expand a role to edit its ordered fallback chain, tried when the primary model fails.
+        Assign a model to each OMP role. Unset smol/slow/designer roles inherit the default
+        model; advisor and tiny reuse the slow and smol chains. Expand a role to edit its
+        ordered fallback chain, tried when the primary model fails.
       </p>
 
       {configQuery.isLoading ? (
@@ -280,7 +287,7 @@ export function ModelRolesPanel() {
                       apiTarget="omp"
                       value={currentModel}
                       onValueChange={(model) => handleValueChange(role.key, model)}
-                      placeholder="Not set (uses default)"
+                      placeholder={role.unsetNote}
                       ariaLabel={`omp-role-${role.key}-model`}
                     />
                   </div>
