@@ -66,8 +66,10 @@ export interface ModelsCommandOptions {
   command: string;
   /** Success source label, e.g. 'opencode' or 'omp' */
   sourceName: string;
-  /** Env var that overrides the default 15s exec timeout */
+  /** Env var that overrides the default exec timeout */
   timeoutEnvVar: string;
+  /** Default exec timeout in ms when the env var is unset (default 15000) */
+  defaultTimeoutMs?: number;
   /** Extra directory prepended to PATH for the exec call */
   extraPath?: string;
   /** Error message returned when the CLI binary is missing (ENOENT) */
@@ -82,7 +84,8 @@ export function runModelsCommand(
   const { promise, resolve } = Promise.withResolvers<{ result: ModelsResult; status: number }>();
 
   const parsedTimeout = Number(process.env[options.timeoutEnvVar]);
-  const timeout = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : 15000;
+  const fallback = options.defaultTimeoutMs ?? 15000;
+  const timeout = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : fallback;
 
   const env = options.extraPath
     ? { ...process.env, PATH: `${options.extraPath}:${process.env.PATH}` }
@@ -100,7 +103,14 @@ export function runModelsCommand(
 
     let result: ModelsResult;
 
-    if (!error && options.parseStdout) {
+    // exec kills the process with SIGTERM on timeout; surface a hint instead
+    // of the bare 'Command failed' message
+    const killedByTimeout = error && (error.killed || error.signal === 'SIGTERM');
+    const effectiveError = killedByTimeout
+      ? Object.assign(new Error(`${options.command} timed out after ${Math.round(timeout / 1000)}s (override with ${options.timeoutEnvVar})`), { code: error.code, signal: error.signal })
+      : error;
+
+    if (!effectiveError && options.parseStdout) {
       if (stderr) {
         console.warn(`[${options.sourceName}-models] stderr:`, stderr);
       }
@@ -113,7 +123,7 @@ export function runModelsCommand(
         result = { models: [], source: 'error', error: 'Failed to parse models output' };
       }
     } else {
-      result = handleExecResult(error, stdout, stderr, options.sourceName);
+      result = handleExecResult(effectiveError, stdout, stderr, options.sourceName);
     }
 
     if (error && options.notFoundError && /ENOENT|command not found/.test(error.message)) {

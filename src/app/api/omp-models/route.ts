@@ -25,6 +25,8 @@ export async function GET(): Promise<Response> {
     command: 'omp models --json',
     sourceName: 'omp',
     timeoutEnvVar: 'OMP_MODELS_TIMEOUT_MS',
+    // Cold catalog refreshes can take 30s+; the default 15s kills them
+    defaultTimeoutMs: 60000,
     notFoundError: 'OMP CLI not found',
     parseStdout: parseOmpModelsJson,
   });

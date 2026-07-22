@@ -63,7 +63,7 @@ describe('/api/omp-models', () => {
     expect(data.source).toBe('omp');
     expect(data.models).toEqual(['kimi-code/k3', 'openai-codex/gpt-5.4']);
     expect(call?.[0]).toBe('omp models --json');
-    expect(call?.[1]?.timeout).toBe(15000);
+    expect(call?.[1]?.timeout).toBe(60000);
     expect(typeof call?.[2]).toBe('function');
   });
 
@@ -139,6 +139,23 @@ describe('/api/omp-models', () => {
     expect(response.status).toBe(503);
     expect(data.source).toBe('error');
     expect(data.error).toBe('Failed to parse models output');
+  });
+
+  it('should return a timeout hint when the CLI is killed by the timeout', async () => {
+    mockExec.mockImplementation((_cmd: unknown, _opts: unknown, callback: ExecCallback) => {
+      const error = new Error('Command failed: omp models --json') as ExecException;
+      error.killed = true;
+      error.signal = 'SIGTERM';
+      callback(error, '', '');
+    });
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data.source).toBe('error');
+    expect(data.error).toContain('timed out after 60s');
+    expect(data.error).toContain('OMP_MODELS_TIMEOUT_MS');
   });
 
   it('should return 503 with error payload when GET returns empty models', async () => {
