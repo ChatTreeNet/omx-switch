@@ -25,12 +25,21 @@ export function detectConfig(configPath: string = CONFIG_PATH): boolean {
 }
 
 export async function readConfig(configPath: string = CONFIG_PATH): Promise<OmpConfig> {
+  let content: string;
   try {
-    const content = await readFile(configPath, 'utf-8');
+    content = await readFile(configPath, 'utf-8');
+  } catch {
+    // Missing or unreadable file is treated as "no config"
+    return {};
+  }
+
+  try {
     const config = parse(content) as OmpConfig | null;
     return config ?? {};
-  } catch {
-    return {};
+  } catch (error) {
+    // A malformed file must surface loudly: callers would otherwise merge
+    // into {} and silently overwrite the user's recoverable config
+    throw new Error(`Failed to parse OMP config at ${configPath}: ${error}`);
   }
 }
 

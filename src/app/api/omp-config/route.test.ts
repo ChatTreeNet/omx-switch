@@ -57,6 +57,25 @@ describe('/api/omp-config', () => {
     expect(data.modelRoles).toEqual({});
   });
 
+  it('returns 500 with a parse error and refuses to write when config.yml is malformed', async () => {
+    mockReadConfig.mockRejectedValue(
+      new Error('Failed to parse OMP config at /home/x/.omp/agent/config.yml: YAMLParseError')
+    );
+
+    const getResponse = await GET();
+    const getData = await getResponse.json();
+    expect(getResponse.status).toBe(500);
+    expect(getData.error).toContain('Failed to parse OMP config');
+
+    const postResponse = await POST(createPostRequest({
+      modelRoles: { default: 'kimi-code/k3' },
+    }));
+    const postData = await postResponse.json();
+    expect(postResponse.status).toBe(500);
+    expect(postData.error).toContain('Failed to parse OMP config');
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
   it('rejects array request bodies', async () => {
     const response = await POST(createPostRequest(['not-an-object']));
 

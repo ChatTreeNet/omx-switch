@@ -50,7 +50,7 @@ export async function GET() {
   } catch (error) {
     console.error('Error reading OMP config:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
     );
   }
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error updating OMP config:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
     );
   }
