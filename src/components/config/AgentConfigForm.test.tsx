@@ -209,7 +209,7 @@ describe('AgentConfigForm - echo bug fix', () => {
     expect(requestBody.agents.sisyphus.fallback_models).toBeNull();
     expect(requestBody.agents.sisyphus.reasoningEffort).toBeNull();
   });
-  it('shows the upstream hephaestus fallback chain when no model is configured', async () => {
+  it('shows a no-model hint when no model is configured', async () => {
     mockFetch
       .mockResolvedValueOnce(
         jsonResponse({
@@ -231,10 +231,8 @@ describe('AgentConfigForm - echo bug fix', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/using default fallback chain/i)).toBeInTheDocument();
+      expect(screen.getByText(/no model configured/i)).toBeInTheDocument();
     });
-
-    expect(screen.getByText('openai/gpt-5.4')).toBeInTheDocument();
   });
 
 });

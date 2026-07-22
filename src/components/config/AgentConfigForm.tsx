@@ -25,19 +25,6 @@ interface AgentConfigFormProps {
   onSaveSuccess?: () => void;
 }
 
-const AGENT_FALLBACK_CHAINS: Record<string, string[]> = {
-  sisyphus: ['anthropic/claude-opus-4-6', 'kimi-k2.5', 'openai/gpt-5.4', 'glm-5', 'big-pickle'],
-  prometheus: ['anthropic/claude-opus-4-6', 'openai/gpt-5.4', 'glm-5', 'google/gemini-3.1-pro'],
-  metis: ['anthropic/claude-opus-4-6', 'openai/gpt-5.4', 'glm-5', 'k2p5'],
-  atlas: ['anthropic/claude-sonnet-4-6', 'kimi-k2.5', 'openai/gpt-5.4', 'minimax-m2.7'],
-  hephaestus: ['openai/gpt-5.4'],
-  oracle: ['openai/gpt-5.4', 'google/gemini-3.1-pro', 'anthropic/claude-opus-4-6', 'glm-5'],
-  momus: ['openai/gpt-5.4', 'anthropic/claude-opus-4-6', 'google/gemini-3.1-pro', 'glm-5'],
-  explore: ['grok-code-fast-1', 'minimax-m2.7-highspeed', 'minimax-m2.7', 'anthropic/claude-haiku-4-5', 'gpt-5-nano'],
-  librarian: ['minimax-m2.7', 'minimax-m2.7-highspeed', 'anthropic/claude-haiku-4-5', 'gpt-5-nano'],
-  default: ['anthropic/claude-opus-4-6', 'openai/gpt-5.4'],
-};
-
 export function AgentConfigForm({ 
   agentName = 'default',
   apiTarget,
@@ -169,8 +156,6 @@ export function AgentConfigForm({
   const isModelInvalid = currentModel && availableModels.size > 0 && !availableModels.has(currentModel);
   const isModelMissing = !currentModel;
 
-  const fallbackChain = AGENT_FALLBACK_CHAINS[agentName] || AGENT_FALLBACK_CHAINS.default;
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -212,26 +197,9 @@ export function AgentConfigForm({
       {isModelMissing && (
         <div className="flex items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/20">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400" />
-          <div className="text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="font-medium">Using default fallback chain</span> — this agent will try models in priority order:
-            <div className="mt-2 flex flex-wrap items-center gap-1">
-              {fallbackChain.map((model, index) => (
-                <React.Fragment key={model}>
-                  <code className={`rounded px-1.5 py-0.5 text-xs ${
-                    index === 0 
-                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 font-medium' 
-                      : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
-                  }`}>
-                    {model}
-                  </code>
-                  {index < fallbackChain.length - 1 && (
-                    <span className="text-zinc-400 dark:text-zinc-500">→</span>
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Select a model below to override the default behavior.</p>
-          </div>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            <span className="font-medium">No model configured</span> — select a model below to configure this agent.
+          </p>
         </div>
       )}
 

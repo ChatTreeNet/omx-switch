@@ -44,7 +44,7 @@ describe('CategoryConfigForm', () => {
     );
   };
 
-  it('shows the upstream quick fallback chain when no model is configured', async () => {
+  it('shows a no-model hint when no model is configured', async () => {
     mockFetch.mockResolvedValueOnce(
       jsonResponse({
         models: [],
@@ -55,10 +55,8 @@ describe('CategoryConfigForm', () => {
     renderForm();
 
     await waitFor(() => {
-      expect(screen.getByText(/using built-in fallback chain/i)).toBeInTheDocument();
+      expect(screen.getByText(/no model configured/i)).toBeInTheDocument();
     });
-
-    expect(screen.getByText('openai/gpt-5.4-mini')).toBeInTheDocument();
   });
 
   it('allows saving new reasoningEffort and fallback_models', async () => {
