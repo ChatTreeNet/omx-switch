@@ -51,7 +51,7 @@ omx-switch/
 ## ANTI-PATTERNS (THIS PROJECT)
 - Do not send secret-like keys (`api*`, `*token*`, `*secret*`, `*password*`, etc.) to `/api/omo-config` or `/api/omp-config`; requests are rejected with 403.
 - Do not add unsupported agent/category fields in config update payloads; validators enforce per-field rules.
-- Do not reintroduce session monitoring, kanban, or host-management features. Profiles are OMO-only.
+- Do not reintroduce session monitoring, kanban, or host-management features.
 - Do not parse the human `omp models` table output; use `--json`.
 
 ## COMMANDS

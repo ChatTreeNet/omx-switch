@@ -24,7 +24,7 @@ src/components/
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Workspace tabs / agent sidebar | `src/components/config/ConfigWorkspace.tsx` | dynamic agent list from config; profiles tab is OMO-only |
+| Workspace tabs / agent sidebar | `src/components/config/ConfigWorkspace.tsx` | dynamic agent list from config; both targets get a Profiles tab |
 | Per-agent save flow | `src/components/config/AgentConfigForm.tsx` | POST `{ agents: { [name]: payload } }` to `/api/{target}-config` |
 | Dropdown behavior | `src/components/ModelSelector.tsx` | fetches `/api/{target}-models`; swallows Radix's spurious `onValueChange('')` |
 | Sync banner | `src/components/SyncStatus.tsx` | renders only when `needsSync` is true |
@@ -32,7 +32,7 @@ src/components/
 ## CONVENTIONS
 - Components are client components (`'use client'`) and use TanStack Query for all fetches; query keys are `['config', target]` and `['models', target]`; mutations invalidate the matching key.
 - `apiTarget: 'omo' | 'omp'` (exported from `ModelSelector.tsx`) is the single discriminator between the two targets; do not fork components per target.
-- Profiles are an OMO-only concept: profiles components hit `/api/profiles` and invalidate `['config', 'omo']`.
+- Profiles exist for both targets: OMO via `/api/profiles` (agents/categories payloads), OMP via `/api/omp-profiles` (modelRoles/fallbackChains payloads). Profiles components take `apiTarget` and invalidate `['config', target]`.
 - UI tests are co-located (`*.test.tsx`); mock `ModelSelector` with a plain `<select>` when Radix pointer behavior is not under test.
 
 ## ANTI-PATTERNS

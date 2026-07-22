@@ -13,6 +13,7 @@ src/app/api/
 ├── omp-config/    # GET/POST ~/.omp/agent/config.yml modelRoles (secret-filtered)
 ├── omo-models/    # GET model list from `opencode models`
 ├── omp-models/    # GET model list from `omp models --json`
+├── omp-profiles/  # OMP profile CRUD, apply, import/export (~/.omp/agent/profiles)
 └── omo-sync/      # GET staleness of github.com/code-yeongyu/oh-my-openagent (60-day threshold)
 ```
 
