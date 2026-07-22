@@ -15,6 +15,15 @@ A small Next.js GUI for configuring the models of two OpenCode-ecosystem tools:
 The page also shows a warning banner when the upstream OMO repository
 (`code-yeongyu/oh-my-openagent`) has not been pushed to in over 60 days.
 
+## Run with npx
+
+```bash
+npx omx-switch
+```
+
+Then open [http://localhost:3457](http://localhost:3457). Press `Ctrl+C` to stop
+the server.
+
 ## Develop
 
 ```bash
