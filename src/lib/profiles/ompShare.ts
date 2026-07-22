@@ -65,6 +65,22 @@ export function parseImportedOmpProfileFile(value: unknown): {
 
   const emojiValue = profileValue.emoji;
   const descriptionValue = profileValue.description;
+  const configValue = value.config;
+
+  if (isRecord(configValue) && configValue.fallbackChains !== undefined) {
+    if (!isRecord(configValue.fallbackChains)) {
+      throw new Error('Imported fallbackChains must be an object');
+    }
+
+    for (const [key, chain] of Object.entries(configValue.fallbackChains)) {
+      if (
+        !Array.isArray(chain)
+        || chain.some((entry) => typeof entry !== 'string' || entry.trim() === '')
+      ) {
+        throw new Error(`Imported fallback chain '${key}' must be an array of non-empty strings`);
+      }
+    }
+  }
 
   return {
     profile: {
@@ -76,6 +92,6 @@ export function parseImportedOmpProfileFile(value: unknown): {
           ? descriptionValue.trim()
           : undefined,
     },
-    config: normalizeOmpProfileConfig(value.config),
+    config: normalizeOmpProfileConfig(configValue),
   };
 }

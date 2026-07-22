@@ -33,7 +33,12 @@ describe('ompStorage', () => {
   it('round-trips a profile config with normalization', async () => {
     await storage.writeOmpProfileConfig('fast', {
       modelRoles: { default: 'kimi-code/k3', bad: 42 as never },
-      fallbackChains: { default: ['openai/gpt-5.4'], junk: 'nope' as never },
+      fallbackChains: {
+        default: ['openai/gpt-5.4'],
+        junk: 'nope' as never,
+        numeric: [42] as never,
+        blank: [''],
+      },
       modelFallback: true,
     });
 

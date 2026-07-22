@@ -85,6 +85,24 @@ describe('/api/omp-profiles/import', () => {
     expect(mockWriteConfig).not.toHaveBeenCalled();
   });
 
+  it('rejects fallback chains containing non-string or empty entries', async () => {
+    for (const fallbackChains of [
+      { default: [42] },
+      { default: [''] },
+      { default: 'not-an-array' },
+      ['not-an-object'],
+    ]) {
+      const response = await POST(createRequest({
+        ...validFile,
+        config: { ...validFile.config, fallbackChains },
+      }));
+
+      expect(response.status).toBe(400);
+    }
+    expect(mockWriteIndex).not.toHaveBeenCalled();
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
   it('rolls back the index when the config write fails', async () => {
     mockWriteConfig.mockRejectedValue(new Error('disk full'));
 

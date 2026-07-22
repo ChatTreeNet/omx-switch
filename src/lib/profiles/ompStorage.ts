@@ -22,6 +22,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isNonEmptyStringArray(value: unknown): value is string[] {
+  return Array.isArray(value)
+    && value.every((entry) => typeof entry === 'string' && entry.trim() !== '');
+}
+
 export function ensureOmpProfilesDir(): void {
   if (!existsSync(OMP_PROFILES_DIR)) {
     mkdirSync(OMP_PROFILES_DIR, { recursive: true });
@@ -56,7 +61,7 @@ export function normalizeOmpProfileConfig(config: unknown): OmpProfileConfig {
 
   if (isRecord(config.fallbackChains)) {
     normalized.fallbackChains = Object.fromEntries(
-      Object.entries(config.fallbackChains).filter(([, v]) => Array.isArray(v))
+      Object.entries(config.fallbackChains).filter(([, v]) => isNonEmptyStringArray(v))
     ) as Record<string, string[]>;
   } else {
     delete normalized.fallbackChains;

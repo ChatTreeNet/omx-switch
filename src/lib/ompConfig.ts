@@ -3,6 +3,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { homedir } from 'os';
 import { parse, stringify } from 'yaml';
+import { isPlainObject } from '@/lib/configValidation';
 
 export const CONFIG_DIR = join(homedir(), '.omp', 'agent');
 export const CONFIG_PATH = join(CONFIG_DIR, 'config.yml');
@@ -34,8 +35,14 @@ export async function readConfig(configPath: string = CONFIG_PATH): Promise<OmpC
   }
 
   try {
-    const config = parse(content) as OmpConfig | null;
-    return config ?? {};
+    const config: unknown = parse(content);
+    if (config === null) {
+      return {};
+    }
+    if (!isPlainObject(config)) {
+      throw new Error('config root must be a mapping');
+    }
+    return config;
   } catch (error) {
     // A malformed file must surface loudly: callers would otherwise merge
     // into {} and silently overwrite the user's recoverable config
