@@ -7,32 +7,8 @@ const fs = require('fs');
 
 const port = process.env.PORT || '3457';
 
-const nodeRuntimeFlag = '--serve';
-const runtimeRoleEnvVar = 'OMX_SWITCH_RUNTIME_ROLE';
-
-function resolveRuntimeMode(argv) {
-  if (!Array.isArray(argv)) {
-    throw new TypeError('Runtime arguments must be provided as an array.');
-  }
-
-  if (argv.length === 0) {
-    return { role: 'hub' };
-  }
-
-  if (argv.length === 1 && argv[0] === nodeRuntimeFlag) {
-    return { role: 'node' };
-  }
-
-  const renderedArgs = argv.length > 0 ? argv.join(' ') : '(none)';
-  throw new Error(`Unsupported arguments: ${renderedArgs}. Usage: omx-switch [${nodeRuntimeFlag}]`);
-}
-
 async function main() {
-  const runtimeMode = resolveRuntimeMode(process.argv.slice(2));
-  const runtimeRole = runtimeMode.role;
-
-  console.log(`🚀 Starting OMX Switch ${runtimeRole} on port ${port}...`);
-  console.log(`🛰️ Runtime role: ${runtimeRole}`);
+  console.log(`🚀 Starting OMX Switch on port ${port}...`);
   console.log(`📊 Open http://localhost:${port} to view the model switcher`);
   console.log('');
 
@@ -66,7 +42,6 @@ async function main() {
       ...process.env,
       PORT: port,
       HOSTNAME: '0.0.0.0',
-      [runtimeRoleEnvVar]: runtimeRole,
     }
   });
 

@@ -1,17 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Check } from 'lucide-react';
 import type { CategoryConfig } from '../../../types/omoConfig';
-import type { ApiTarget } from '../../ModelSelector';
+import { useConfigQuery, type ApiTarget } from '@/lib/queries';
 import { CategoriesList } from './CategoriesList';
 import { CategoryConfigForm } from './CategoryConfigForm';
-
-interface OpencodeConfigResponse {
-  agents: Record<string, unknown>;
-  categories: Record<string, CategoryConfig>;
-}
 
 interface CategoriesManagerProps {
   apiTarget: ApiTarget;
@@ -32,16 +27,7 @@ export function CategoriesManager({ apiTarget, onSaveSuccess }: CategoriesManage
     isLoading,
     isError,
     error,
-  } = useQuery<OpencodeConfigResponse>({
-    queryKey: ['config', apiTarget],
-    queryFn: async () => {
-      const res = await fetch(`/api/${apiTarget}-config`);
-      if (!res.ok) {
-        throw new Error('Failed to fetch configuration');
-      }
-      return res.json();
-    },
-  });
+  } = useConfigQuery(apiTarget);
 
   React.useEffect(() => {
     if (toast) {

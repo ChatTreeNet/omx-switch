@@ -2,32 +2,11 @@
 
 import * as React from 'react';
 import { Search, Bot, ChevronRight, AlertTriangle } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import { CategoriesManager } from './categories/CategoriesManager';
 import { ProfileManager } from './profiles/ProfileManager';
 import { AgentConfigForm } from './AgentConfigForm';
 import { ModelRolesPanel } from './ModelRolesPanel';
-import type { ApiTarget } from '../ModelSelector';
-
-interface AgentConfig {
-  model?: string;
-}
-
-interface ConfigResponse {
-  agents: Record<string, AgentConfig>;
-}
-
-interface ModelsResponse {
-  models: string[];
-  source: string;
-  error?: string;
-}
-
-function isModelsResponse(value: unknown): value is ModelsResponse {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as { models?: unknown };
-  return Array.isArray(candidate.models);
-}
+import { useConfigQuery, useModelsQuery, type ApiTarget } from '@/lib/queries';
 
 type AgentStatus = 'ok' | 'invalid' | 'unconfigured';
 
@@ -65,46 +44,9 @@ export function ConfigWorkspace({ apiTarget }: ConfigWorkspaceProps) {
   const [selectedAgent, setSelectedAgent] = React.useState('default');
   const [searchQuery, setSearchQuery] = React.useState('');
 
-  const { data: configData } = useQuery<ConfigResponse>({
-    queryKey: ['config', apiTarget],
-    queryFn: async () => {
-      const res = await fetch(`/api/${apiTarget}-config`);
-      if (!res.ok) throw new Error('Failed to fetch config');
-      return res.json();
-    },
-  });
+  const { data: configData } = useConfigQuery(apiTarget);
 
-  const { data: modelsData } = useQuery<ModelsResponse>({
-    queryKey: ['models', apiTarget],
-    queryFn: async () => {
-      const res = await fetch(`/api/${apiTarget}-models`);
-      let parsed: unknown = null;
-      try {
-        parsed = await res.json();
-      } catch {
-        parsed = null;
-      }
-
-      const errorMessage =
-        parsed &&
-        typeof parsed === 'object' &&
-        'error' in parsed &&
-        typeof parsed.error === 'string'
-          ? parsed.error
-          : null;
-
-      if (!res.ok || errorMessage) {
-        throw new Error(errorMessage || `Failed to fetch models (${res.status})`);
-      }
-
-      if (!isModelsResponse(parsed)) {
-        throw new Error('Invalid models response');
-      }
-
-      return parsed;
-    },
-    retry: false,
-  });
+  const { data: modelsData } = useModelsQuery(apiTarget);
 
   const availableModels = React.useMemo(
     () => new Set(modelsData?.models ?? []),

@@ -1,22 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Loader2, Plus, RotateCcw, X } from 'lucide-react';
 import { ModelSelector } from '../ModelSelector';
-
-interface OmpConfigResponse {
-  modelRoles?: Record<string, string>;
-  modelFallback?: boolean;
-  fallbackChains?: Record<string, string[]>;
-  [key: string]: unknown;
-}
-
-interface ModelsResponse {
-  models: string[];
-  source: string;
-  error?: string;
-}
+import { useConfigQuery, useModelsQuery } from '@/lib/queries';
 
 interface RoleDefinition {
   key: string;
@@ -49,31 +37,9 @@ export function ModelRolesPanel() {
   const [expandedChains, setExpandedChains] = React.useState<Record<string, boolean>>({});
   const [fallbackEnabled, setFallbackEnabled] = React.useState<boolean | null>(null);
 
-  const configQuery = useQuery<OmpConfigResponse>({
-    queryKey: ['config', 'omp'],
-    queryFn: async () => {
-      const res = await fetch('/api/omp-config');
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to load OMP config');
-      }
-      return data;
-    },
-    retry: false,
-  });
+  const configQuery = useConfigQuery('omp', { retry: false });
 
-  const modelsQuery = useQuery<ModelsResponse>({
-    queryKey: ['models', 'omp'],
-    queryFn: async () => {
-      const res = await fetch('/api/omp-models');
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Failed to fetch models');
-      }
-      return data;
-    },
-    retry: false,
-  });
+  const modelsQuery = useModelsQuery('omp');
 
   // Memoized: a fresh `?? {}` literal every render would retrigger the sync
   // effects below forever (setState -> render -> effect -> setState...)

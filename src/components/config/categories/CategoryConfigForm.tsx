@@ -3,21 +3,9 @@
 import * as React from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { ModelSelector, type ApiTarget } from '../../ModelSelector';
+import { ModelSelector } from '../../ModelSelector';
+import { useModelsQuery, type ApiTarget } from '@/lib/queries';
 import { CategoryConfig } from '../../../types/omoConfig';
-
-interface ModelsResponse {
-  models: string[];
-  source: string;
-  error?: string;
-}
-
-function isModelsResponse(value: unknown): value is ModelsResponse {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as { models?: unknown };
-  return Array.isArray(candidate.models);
-}
 
 interface CategoryConfigFormData {
   model: string;
@@ -80,38 +68,7 @@ export function CategoryConfigForm({
     },
   });
 
-  const { data: modelsData } = useQuery<ModelsResponse>({
-    queryKey: ['models', apiTarget],
-    queryFn: async () => {
-      const res = await fetch(`/api/${apiTarget}-models`);
-      let parsed: unknown = null;
-      try {
-        parsed = await res.json();
-      } catch {
-        parsed = null;
-      }
-
-      const errorMessage =
-        parsed &&
-        typeof parsed === 'object' &&
-        'error' in parsed &&
-        typeof parsed.error === 'string'
-          ? parsed.error
-          : null;
-
-      if (!res.ok || errorMessage) {
-        throw new Error(errorMessage || `Failed to fetch models (${res.status})`);
-      }
-
-      if (!isModelsResponse(parsed)) {
-        throw new Error('Invalid models response');
-      }
-
-      const data = parsed;
-      return data;
-    },
-    retry: false,
-  });
+  const { data: modelsData } = useModelsQuery(apiTarget);
 
   const availableModels = React.useMemo(
     () => new Set(modelsData?.models ?? []),

@@ -2,22 +2,8 @@
 
 import * as React from 'react';
 import { Pencil, Trash2, Layers, AlertTriangle, AlertCircle } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import { CategoryConfig } from '../../../types/omoConfig';
-import type { ApiTarget } from '../../ModelSelector';
-
-
-interface ModelsResponse {
-  models: string[];
-  source: string;
-  error?: string;
-}
-
-function isModelsResponse(value: unknown): value is ModelsResponse {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as { models?: unknown };
-  return Array.isArray(candidate.models);
-}
+import { useModelsQuery, type ApiTarget } from '@/lib/queries';
 
 interface CategoriesListProps {
   /** Record of category key to category configuration */
@@ -253,38 +239,7 @@ export function CategoriesList({
   onEdit,
   onDelete,
 }: CategoriesListProps) {
-  const { data: modelsData } = useQuery<ModelsResponse>({
-    queryKey: ['models', apiTarget],
-    queryFn: async () => {
-      const res = await fetch(`/api/${apiTarget}-models`);
-      let parsed: unknown = null;
-      try {
-        parsed = await res.json();
-      } catch {
-        parsed = null;
-      }
-
-      const errorMessage =
-        parsed &&
-        typeof parsed === 'object' &&
-        'error' in parsed &&
-        typeof parsed.error === 'string'
-          ? parsed.error
-          : null;
-
-      if (!res.ok || errorMessage) {
-        throw new Error(errorMessage || `Failed to fetch models (${res.status})`);
-      }
-
-      if (!isModelsResponse(parsed)) {
-        throw new Error('Invalid models response');
-      }
-
-      const data = parsed;
-      return data;
-    },
-    retry: false,
-  });
+  const { data: modelsData } = useModelsQuery(apiTarget);
 
   const availableModels = React.useMemo(
     () => (modelsData ? new Set(modelsData.models) : null),

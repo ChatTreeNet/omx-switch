@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { ConfigWorkspace } from '@/components/config/ConfigWorkspace';
 import { SyncStatus } from '@/components/SyncStatus';
-import type { ApiTarget } from '@/components/ModelSelector';
+import type { ApiTarget } from '@/lib/queries';
 
 export default function Home() {
   const [target, setTarget] = React.useState<ApiTarget>('omo');

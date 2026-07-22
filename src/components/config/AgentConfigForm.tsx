@@ -2,46 +2,11 @@
 
 import * as React from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ModelSelector, type ApiTarget } from '../ModelSelector';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ModelSelector } from '../ModelSelector';
+import { useConfigQuery, useModelsQuery, type ApiTarget } from '@/lib/queries';
+import type { AgentConfig } from '@/types/omoConfig';
 import { Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
-
-interface AgentConfig {
-  model?: string;
-  temperature?: number;
-  top_p?: number;
-  variant?: string;
-  prompt_append?: string;
-  reasoningEffort?: string;
-  fallback_models?: unknown;
-}
-
-interface CategoryConfig {
-  model?: string;
-  variant?: string;
-  temperature?: number;
-  top_p?: number;
-  prompt_append?: string;
-  description?: string;
-}
-
-interface OpencodeConfigResponse {
-  agents: Record<string, AgentConfig>;
-  categories?: Record<string, CategoryConfig>;
-  defaultAgent?: AgentConfig;
-}
-
-interface OpencodeModelsResponse {
-  models: string[];
-  source: string;
-  error?: string;
-}
-
-function isModelsResponse(value: unknown): value is OpencodeModelsResponse {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as { models?: unknown };
-  return Array.isArray(candidate.models);
-}
 
 interface AgentConfigFormData {
   model: string;
@@ -84,16 +49,7 @@ export function AgentConfigForm({
     message: string;
   } | null>(null);
 
-  const { data: config, isLoading } = useQuery<OpencodeConfigResponse>({
-    queryKey: ['config', apiTarget],
-    queryFn: async () => {
-      const res = await fetch(`/api/${apiTarget}-config`);
-      if (!res.ok) {
-        throw new Error('Failed to fetch config');
-      }
-      return res.json();
-    },
-  });
+  const { data: config, isLoading } = useConfigQuery(apiTarget);
    const {
     control,
     handleSubmit,
@@ -113,38 +69,7 @@ export function AgentConfigForm({
   });
 
 
-  const { data: modelsData } = useQuery<OpencodeModelsResponse>({
-    queryKey: ['models', apiTarget],
-    queryFn: async () => {
-      const res = await fetch(`/api/${apiTarget}-models`);
-      let parsed: unknown = null;
-      try {
-        parsed = await res.json();
-      } catch {
-        parsed = null;
-      }
-
-      const errorMessage =
-        parsed &&
-        typeof parsed === 'object' &&
-        'error' in parsed &&
-        typeof parsed.error === 'string'
-          ? parsed.error
-          : null;
-
-      if (!res.ok || errorMessage) {
-        throw new Error(errorMessage || `Failed to fetch models (${res.status})`);
-      }
-
-      if (!isModelsResponse(parsed)) {
-        throw new Error('Invalid models response');
-      }
-
-      const data = parsed;
-      return data;
-    },
-    retry: false,
-  });
+  const { data: modelsData } = useModelsQuery(apiTarget);
 
   const availableModels = React.useMemo(
     () => new Set(modelsData?.models ?? []),

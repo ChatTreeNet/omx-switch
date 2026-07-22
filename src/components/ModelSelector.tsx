@@ -2,22 +2,14 @@
 
 import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
-import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronDown, Search, AlertCircle, RefreshCw } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useModelsQuery, type ApiTarget } from '@/lib/queries';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
-
-interface ModelsResponse {
-  models: string[];
-  source: string;
-  error?: string;
-}
-
-export type ApiTarget = 'omo' | 'omp';
 
 interface ModelSelectorProps {
   value: string;
@@ -135,18 +127,7 @@ export function ModelSelector({
   const [searchQuery, setSearchQuery] = React.useState('');
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
-  const { data, isLoading, isError, error, refetch } = useQuery<ModelsResponse>({
-    queryKey: ['models', apiTarget],
-    queryFn: async () => {
-      const res = await fetch(`/api/${apiTarget}-models`);
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Failed to fetch models');
-      }
-      return data;
-    },
-    retry: false,
-  });
+  const { data, isLoading, isError, error, refetch } = useModelsQuery(apiTarget);
 
   // Ensure the currently selected model is in the list (for echo display)
   const allModels = React.useMemo(() => {
