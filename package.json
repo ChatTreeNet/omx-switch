@@ -5,7 +5,7 @@
   "description": "Model switcher GUI for OMO and OMP",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ChatTreeNet/VibePulse"
+    "url": "https://github.com/ChatTreeNet/omx-switch.git"
   },
   "files": [
     ".next",
