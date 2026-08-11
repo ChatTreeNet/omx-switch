@@ -4,7 +4,84 @@ import * as React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Loader2, Plus, RotateCcw, X } from 'lucide-react';
 import { ModelSelector } from '../ModelSelector';
-import { useConfigQuery, useModelsQuery } from '@/lib/queries';
+import { type OmpModelDetail, useConfigQuery, useModelsQuery } from '@/lib/queries';
+
+const FIXED_THINKING_LEVELS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+const ROLE_THINKING_LEVELS = ['off', ...FIXED_THINKING_LEVELS, 'auto'] as const;
+const DEFAULT_THINKING_LEVELS = [...FIXED_THINKING_LEVELS, 'auto'] as const;
+
+type RoleThinkingLevel = (typeof ROLE_THINKING_LEVELS)[number];
+
+function isRoleThinkingLevel(value: string): value is RoleThinkingLevel {
+  return ROLE_THINKING_LEVELS.some((level) => level === value);
+}
+
+function splitRoleModelValue(value: string, availableModels: string[]) {
+  if (!value || availableModels.includes(value)) {
+    return { model: value, thinkingLevel: '' as RoleThinkingLevel | '' };
+  }
+
+  const separatorIndex = value.lastIndexOf(':');
+  if (separatorIndex > value.indexOf('/')) {
+    const suffix = value.slice(separatorIndex + 1);
+    const model = value.slice(0, separatorIndex);
+    if (isRoleThinkingLevel(suffix) && availableModels.includes(model)) {
+      return {
+        model,
+        thinkingLevel: suffix,
+      };
+    }
+  }
+
+  return { model: value, thinkingLevel: '' as RoleThinkingLevel | '' };
+}
+
+function formatRoleModelValue(model: string, thinkingLevel: RoleThinkingLevel | '') {
+  if (!model || !thinkingLevel) return model;
+  return `${model}:${thinkingLevel}`;
+}
+
+function getThinkingOptions(
+  model: string,
+  availableModels: string[],
+  modelDetails: OmpModelDetail[],
+  configuredLevel: RoleThinkingLevel | ''
+): RoleThinkingLevel[] {
+  const detail = modelDetails.find((entry) => entry.selector === model);
+  const hasCapabilityMetadata =
+    detail !== undefined && (detail.reasoning !== undefined || detail.thinking !== undefined);
+
+  let options: RoleThinkingLevel[];
+  if (!model || !availableModels.includes(model)) {
+    // An unavailable selector may be a literal model ID ending in a token such
+    // as `:max`. Keep it opaque so editing cannot silently rewrite the ID.
+    options = [];
+  } else if (!hasCapabilityMetadata) {
+    // Older OMP versions do not include capability metadata. Keep the full
+    // selector surface available instead of making thinking unconfigurable.
+    options = [...ROLE_THINKING_LEVELS];
+  } else if (
+    detail.reasoning === false ||
+    detail.thinking === null ||
+    (Array.isArray(detail.thinking) && detail.thinking.length === 0)
+  ) {
+    options = [];
+  } else {
+    const fixedLevels = (detail.thinking ?? FIXED_THINKING_LEVELS).filter(
+      (level): level is (typeof FIXED_THINKING_LEVELS)[number] =>
+        FIXED_THINKING_LEVELS.some((candidate) => candidate === level)
+    );
+    options = ['off', ...fixedLevels, 'auto'];
+  }
+
+  // Never make an existing selector impossible to display or clear when model
+  // metadata changes between OMP releases.
+  if (configuredLevel && !options.includes(configuredLevel)) {
+    options.push(configuredLevel);
+  }
+
+  return ROLE_THINKING_LEVELS.filter((level) => options.includes(level));
+}
 
 interface RoleDefinition {
   key: string;
@@ -42,6 +119,7 @@ export function ModelRolesPanel() {
   const [dirtyChains, setDirtyChains] = React.useState<Record<string, true>>({});
   const [expandedChains, setExpandedChains] = React.useState<Record<string, boolean>>({});
   const [fallbackEnabled, setFallbackEnabled] = React.useState<boolean | null>(null);
+  const [defaultThinkingDraft, setDefaultThinkingDraft] = React.useState<string | null>(null);
 
   const configQuery = useConfigQuery('omp', { retry: false });
 
@@ -58,6 +136,14 @@ export function ModelRolesPanel() {
     [configQuery.data]
   );
   const configuredFallbackEnabled = configQuery.data?.modelFallback !== false;
+  const configuredDefaultThinkingLevel =
+    typeof configQuery.data?.defaultThinkingLevel === 'string'
+      ? configQuery.data.defaultThinkingLevel
+      : '';
+  const selectedDefaultThinkingLevel =
+    defaultThinkingDraft ?? configuredDefaultThinkingLevel;
+  const availableModels = modelsQuery.data?.models ?? [];
+  const modelDetails = modelsQuery.data?.modelDetails ?? [];
 
   // Follow the on-disk config for any role the user has not edited; roles
   // deleted from the file (e.g. unset + saved) must also leave `selections`,
@@ -109,6 +195,7 @@ export function ModelRolesPanel() {
       modelRoles?: Record<string, string | null>;
       fallbackChains?: Record<string, string[] | null>;
       modelFallback?: boolean;
+      defaultThinkingLevel?: string | null;
     }) => {
       const res = await fetch('/api/omp-config', {
         method: 'POST',
@@ -126,6 +213,7 @@ export function ModelRolesPanel() {
       setClearedRoles({});
       setDirtyChains({});
       setFallbackEnabled(null);
+      setDefaultThinkingDraft(null);
       queryClient.invalidateQueries({ queryKey: ['config', 'omp'] });
     },
   });
@@ -155,8 +243,18 @@ export function ModelRolesPanel() {
   }, [dirtyChains, chainDrafts, configuredChains]);
 
   const fallbackToggleChanged = fallbackEnabled !== null && fallbackEnabled !== configuredFallbackEnabled;
-  const isDirty = changedRoleKeys.length > 0 || changedChainKeys.length > 0 || fallbackToggleChanged;
-  const changeCount = changedRoleKeys.length + changedChainKeys.length + (fallbackToggleChanged ? 1 : 0);
+  const defaultThinkingChanged =
+    defaultThinkingDraft !== null && defaultThinkingDraft !== configuredDefaultThinkingLevel;
+  const isDirty =
+    changedRoleKeys.length > 0 ||
+    changedChainKeys.length > 0 ||
+    fallbackToggleChanged ||
+    defaultThinkingChanged;
+  const changeCount =
+    changedRoleKeys.length +
+    changedChainKeys.length +
+    (fallbackToggleChanged ? 1 : 0) +
+    (defaultThinkingChanged ? 1 : 0);
 
   const handleValueChange = (role: string, model: string) => {
     setSelections((prev) => ({ ...prev, [role]: model }));
@@ -174,6 +272,28 @@ export function ModelRolesPanel() {
     saveMutation.reset();
   };
 
+  const handleModelChange = (role: string, currentValue: string, model: string) => {
+    const { thinkingLevel } = splitRoleModelValue(currentValue, availableModels);
+    const supportedOptions = getThinkingOptions(
+      model,
+      availableModels,
+      modelDetails,
+      thinkingLevel
+    );
+    const nextThinkingLevel = supportedOptions.includes(thinkingLevel as RoleThinkingLevel)
+      ? thinkingLevel
+      : '';
+    handleValueChange(role, formatRoleModelValue(model, nextThinkingLevel));
+  };
+
+  const handleThinkingChange = (
+    role: string,
+    model: string,
+    thinkingLevel: RoleThinkingLevel | ''
+  ) => {
+    handleValueChange(role, formatRoleModelValue(model, thinkingLevel));
+  };
+
   const handleChainChange = (key: string, chain: string[]) => {
     setChainDrafts((prev) => ({ ...prev, [key]: chain }));
     setDirtyChains((prev) => ({ ...prev, [key]: true }));
@@ -186,6 +306,7 @@ export function ModelRolesPanel() {
       modelRoles?: Record<string, string | null>;
       fallbackChains?: Record<string, string[] | null>;
       modelFallback?: boolean;
+      defaultThinkingLevel?: string | null;
     } = {};
 
     if (changedRoleKeys.length > 0) {
@@ -207,6 +328,10 @@ export function ModelRolesPanel() {
       payload.modelFallback = fallbackEnabled;
     }
 
+    if (defaultThinkingChanged) {
+      payload.defaultThinkingLevel = defaultThinkingDraft || null;
+    }
+
     saveMutation.mutate(payload);
   };
 
@@ -214,19 +339,42 @@ export function ModelRolesPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-          <input
-            type="checkbox"
-            checked={fallbackEnabled ?? configuredFallbackEnabled}
-            onChange={(event) => {
-              setFallbackEnabled(event.target.checked);
-              saveMutation.reset();
-            }}
-            className="h-4 w-4 rounded border-zinc-300 accent-blue-600"
-          />
-          Enable model fallback on retry
-        </label>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+            <span className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              Default thinking level
+            </span>
+            <select
+              aria-label="OMP default thinking level"
+              value={selectedDefaultThinkingLevel}
+              onChange={(event) => {
+                setDefaultThinkingDraft(event.target.value);
+                saveMutation.reset();
+              }}
+              className="h-9 rounded-md border border-zinc-200 bg-white px-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+            >
+              <option value="">OMP default (high)</option>
+              {DEFAULT_THINKING_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  {level === 'auto' ? 'Auto per prompt' : level}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex h-9 items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+            <input
+              type="checkbox"
+              checked={fallbackEnabled ?? configuredFallbackEnabled}
+              onChange={(event) => {
+                setFallbackEnabled(event.target.checked);
+                saveMutation.reset();
+              }}
+              className="h-4 w-4 rounded border-zinc-300 accent-blue-600"
+            />
+            Enable model fallback on retry
+          </label>
+        </div>
         <div className="flex items-center gap-3">
           {saveMutation.isSuccess && !isDirty && (
             <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
@@ -253,9 +401,10 @@ export function ModelRolesPanel() {
       </div>
 
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Assign a model to each OMP role. Unset smol/slow/designer roles inherit the default
-        model; advisor and tiny reuse the slow and smol chains. Expand a role to edit its
-        ordered fallback chain, tried when the primary model fails.
+        Assign a model and optional thinking override to each OMP role. Unset thinking
+        inherits the global default. Unset smol/slow/designer roles inherit the default model;
+        advisor and tiny reuse the slow and smol chains. Expand a role to edit its ordered
+        fallback chain, tried when the primary model fails.
       </p>
 
       {configQuery.isLoading ? (
@@ -272,7 +421,17 @@ export function ModelRolesPanel() {
         <ul className="space-y-2">
           {roles.map((role) => {
             const cleared = isRoleCleared(role.key);
-            const currentModel = cleared ? '' : (selections[role.key] ?? configuredRoles[role.key] ?? '');
+            const currentRoleValue = cleared
+              ? ''
+              : (selections[role.key] ?? configuredRoles[role.key] ?? '');
+            const { model: currentModel, thinkingLevel: currentThinkingLevel } =
+              splitRoleModelValue(currentRoleValue, availableModels);
+            const thinkingOptions = getThinkingOptions(
+              currentModel,
+              availableModels,
+              modelDetails,
+              currentThinkingLevel
+            );
             const chain = chainDrafts[role.key] ?? configuredChains[role.key] ?? [];
             const chainExpanded = expandedChains[role.key] === true;
             const chainChanged = changedChainKeys.includes(role.key);
@@ -281,7 +440,7 @@ export function ModelRolesPanel() {
                 key={role.key}
                 className="rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-800"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <div className="w-56 shrink-0">
                     <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                       {role.name}
@@ -290,15 +449,46 @@ export function ModelRolesPanel() {
                       {role.description}
                     </div>
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-64 flex-1">
                     <ModelSelector
                       apiTarget="omp"
                       value={currentModel}
-                      onValueChange={(model) => handleValueChange(role.key, model)}
+                      onValueChange={(model) =>
+                        handleModelChange(role.key, currentRoleValue, model)
+                      }
                       placeholder={role.unsetNote}
                       ariaLabel={`omp-role-${role.key}-model`}
                     />
                   </div>
+                  <select
+                    aria-label={`omp-role-${role.key}-thinking`}
+                    value={currentThinkingLevel}
+                    disabled={!currentModel || thinkingOptions.length === 0}
+                    onChange={(event) =>
+                      handleThinkingChange(
+                        role.key,
+                        currentModel,
+                        event.target.value as RoleThinkingLevel | ''
+                      )
+                    }
+                    title={
+                      currentModel && thinkingOptions.length === 0
+                        ? 'This model does not expose adjustable thinking levels'
+                        : 'Override the global thinking level for this role'
+                    }
+                    className="h-9 w-36 shrink-0 rounded-md border border-zinc-200 bg-white px-2 text-xs disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:disabled:bg-zinc-900"
+                  >
+                    <option value="">Inherit thinking</option>
+                    {thinkingOptions.map((level) => (
+                      <option key={level} value={level}>
+                        {level === 'auto'
+                          ? 'Auto'
+                          : level === 'off'
+                            ? 'Off (if supported)'
+                            : level}
+                      </option>
+                    ))}
+                  </select>
                   {configuredRoles[role.key] !== undefined && !cleared && (
                     <button
                       type="button"

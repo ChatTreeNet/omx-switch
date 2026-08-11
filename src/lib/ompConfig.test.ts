@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { readConfig } from './ompConfig';
+import {
+  isOmpDefaultThinkingLevel,
+  readConfig,
+  writeConfig,
+} from './ompConfig';
 
 describe('readConfig', () => {
   let testDir: string;
@@ -27,6 +31,20 @@ describe('readConfig', () => {
     await expect(readConfig(configPath)).resolves.toEqual({});
   });
 
+  it('round-trips the default thinking level without dropping unknown settings', async () => {
+    await writeConfig({
+      defaultThinkingLevel: 'xhigh',
+      autoResume: true,
+      nested: { futureSetting: 42 },
+    }, configPath);
+
+    await expect(readConfig(configPath)).resolves.toEqual({
+      defaultThinkingLevel: 'xhigh',
+      autoResume: true,
+      nested: { futureSetting: 42 },
+    });
+  });
+
   it.each([
     ['a sequence', '- kimi-code/k3\n'],
     ['a string scalar', 'kimi-code/k3\n'],
@@ -37,5 +55,15 @@ describe('readConfig', () => {
     await expect(readConfig(configPath)).rejects.toThrow(
       `Failed to parse OMP config at ${configPath}: Error: config root must be a mapping`
     );
+  });
+});
+
+describe('isOmpDefaultThinkingLevel', () => {
+  it.each(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'])('accepts %s', (level) => {
+    expect(isOmpDefaultThinkingLevel(level)).toBe(true);
+  });
+
+  it.each(['off', '', 'HIGH', null, 42])('rejects %j', (level) => {
+    expect(isOmpDefaultThinkingLevel(level)).toBe(false);
   });
 });

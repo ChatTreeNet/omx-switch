@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readConfig, writeConfig } from '@/lib/ompConfig';
+import {
+  isOmpDefaultThinkingLevel,
+  readConfig,
+  writeConfig,
+} from '@/lib/ompConfig';
 import {
   collectSecretLikeFields,
   forbidden,
@@ -44,6 +48,9 @@ export async function GET() {
     return NextResponse.json({
       ...safeConfig,
       modelRoles,
+      defaultThinkingLevel: isOmpDefaultThinkingLevel(config.defaultThinkingLevel)
+        ? config.defaultThinkingLevel
+        : null,
       modelFallback: retry.modelFallback !== false,
       fallbackChains,
     });
@@ -58,9 +65,12 @@ export async function GET() {
 
 /**
  * POST /api/omp-config
- * Updates OMP model role assignments and retry fallback chains.
+ * Updates OMP model role assignments, the global thinking level, and retry
+ * fallback chains.
  * Payload: {
  *   modelRoles?: { [role]: "provider/model" | null },      — null unsets a role
+ *   defaultThinkingLevel?: "minimal" | "low" | "medium" | "high" |
+ *     "xhigh" | "max" | "auto" | null,                   — null uses the OMP default
  *   fallbackChains?: { [key]: string[] | null },           — null deletes a chain
  *   modelFallback?: boolean                                — master fallback toggle
  * }
@@ -81,9 +91,14 @@ export async function POST(request: NextRequest) {
       return forbidden(disallowedFields);
     }
 
-    const { modelRoles, fallbackChains, modelFallback } = body;
+    const { modelRoles, defaultThinkingLevel, fallbackChains, modelFallback } = body;
 
-    if (modelRoles === undefined && fallbackChains === undefined && modelFallback === undefined) {
+    if (
+      modelRoles === undefined
+      && defaultThinkingLevel === undefined
+      && fallbackChains === undefined
+      && modelFallback === undefined
+    ) {
       return NextResponse.json(
         { error: 'Missing config fields to update' },
         { status: 400 }
@@ -107,6 +122,19 @@ export async function POST(request: NextRequest) {
     if (modelFallback !== undefined && typeof modelFallback !== 'boolean') {
       return NextResponse.json(
         { error: 'modelFallback must be a boolean' },
+        { status: 400 }
+      );
+    }
+
+    if (
+      defaultThinkingLevel !== undefined
+      && defaultThinkingLevel !== null
+      && !isOmpDefaultThinkingLevel(defaultThinkingLevel)
+    ) {
+      return NextResponse.json(
+        {
+          error: 'defaultThinkingLevel must be one of: minimal, low, medium, high, xhigh, max, auto, or null',
+        },
         { status: 400 }
       );
     }
@@ -193,6 +221,11 @@ export async function POST(request: NextRequest) {
       ...currentConfig,
       modelRoles: currentRoles,
     };
+    if (defaultThinkingLevel === null) {
+      delete newConfig.defaultThinkingLevel;
+    } else if (isOmpDefaultThinkingLevel(defaultThinkingLevel)) {
+      newConfig.defaultThinkingLevel = defaultThinkingLevel;
+    }
     // Only write retry when it was modified or already present — never invent it
     if (retryTouched || currentConfig.retry !== undefined) {
       (newConfig as Record<string, unknown>).retry = currentRetry;
@@ -203,6 +236,7 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         modelRoles: currentRoles,
+        defaultThinkingLevel: newConfig.defaultThinkingLevel ?? null,
         modelFallback: currentRetry.modelFallback !== false,
         fallbackChains: currentChains,
       },

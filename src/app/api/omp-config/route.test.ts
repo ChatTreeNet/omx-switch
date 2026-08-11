@@ -34,6 +34,7 @@ describe('/api/omp-config', () => {
   it('returns modelRoles and strips secret-like fields', async () => {
     mockReadConfig.mockResolvedValue({
       modelRoles: { default: 'kimi-code/k3', smol: 'openai/gpt-5.4-mini' },
+      defaultThinkingLevel: 'high',
       'auth.broker.token': 'secret-token-should-not-leak',
       autoResume: true,
     });
@@ -43,6 +44,7 @@ describe('/api/omp-config', () => {
 
     expect(response.status).toBe(200);
     expect(data.modelRoles).toEqual({ default: 'kimi-code/k3', smol: 'openai/gpt-5.4-mini' });
+    expect(data.defaultThinkingLevel).toBe('high');
     expect(data.autoResume).toBe(true);
     expect(JSON.stringify(data)).not.toContain('should-not-leak');
   });
@@ -55,6 +57,17 @@ describe('/api/omp-config', () => {
 
     expect(response.status).toBe(200);
     expect(data.modelRoles).toEqual({});
+    expect(data.defaultThinkingLevel).toBeNull();
+  });
+
+  it('does not expose an unsupported on-disk default thinking level', async () => {
+    mockReadConfig.mockResolvedValue({ defaultThinkingLevel: 'off' as never });
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.defaultThinkingLevel).toBeNull();
   });
 
   it('returns 500 with a parse error and refuses to write when config.yml is malformed', async () => {
@@ -171,6 +184,60 @@ describe('/api/omp-config', () => {
     expect(response.status).toBe(400);
     expect(data.error).toBe('Missing config fields to update');
     expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
+  it.each(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'])(
+    'sets supported default thinking level %s and preserves other settings',
+    async (defaultThinkingLevel) => {
+      mockReadConfig.mockResolvedValue({
+        defaultThinkingLevel: 'low',
+        autoResume: true,
+        futureSetting: { enabled: true },
+      });
+
+      const response = await POST(createPostRequest({ defaultThinkingLevel }));
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.defaultThinkingLevel).toBe(defaultThinkingLevel);
+      expect(mockWriteConfig).toHaveBeenCalledWith({
+        modelRoles: {},
+        defaultThinkingLevel,
+        autoResume: true,
+        futureSetting: { enabled: true },
+      });
+    }
+  );
+
+  it.each(['off', 'none', '', 'HIGH', 42, {}])(
+    'rejects unsupported default thinking level %j',
+    async (defaultThinkingLevel) => {
+      const response = await POST(createPostRequest({ defaultThinkingLevel }));
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toContain('defaultThinkingLevel must be one of');
+      expect(mockWriteConfig).not.toHaveBeenCalled();
+    }
+  );
+
+  it('clears the default thinking level with null without dropping unknown settings', async () => {
+    mockReadConfig.mockResolvedValue({
+      defaultThinkingLevel: 'max',
+      autoResume: true,
+      futureSetting: { enabled: true },
+    });
+
+    const response = await POST(createPostRequest({ defaultThinkingLevel: null }));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.defaultThinkingLevel).toBeNull();
+    expect(mockWriteConfig).toHaveBeenCalledWith({
+      modelRoles: {},
+      autoResume: true,
+      futureSetting: { enabled: true },
+    });
   });
 
   it('merges fallback chains under retry.fallbackChains', async () => {

@@ -26,8 +26,10 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     const profileConfig = await readOmpProfileConfig(id);
     const currentConfig = await readConfig();
 
-    // Merge per-key: profile assignments win, unmentioned roles/chains keep
-    // their current values, and every other config.yml field is untouched.
+    // Merge per-key: profile assignments win, unmentioned roles/chains and an
+    // omitted thinking level keep their current values, and every other
+    // config.yml field is untouched. A null thinking level explicitly clears
+    // the setting so OMP falls back to its built-in default.
     const currentRoles = isPlainObject(currentConfig.modelRoles)
       ? (currentConfig.modelRoles as Record<string, string>)
       : {};
@@ -47,6 +49,12 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
           : {}),
       },
     };
+
+    if (profileConfig.defaultThinkingLevel === null) {
+      delete mergedConfig.defaultThinkingLevel;
+    } else if (profileConfig.defaultThinkingLevel !== undefined) {
+      mergedConfig.defaultThinkingLevel = profileConfig.defaultThinkingLevel;
+    }
 
     try {
       await writeConfig(mergedConfig);

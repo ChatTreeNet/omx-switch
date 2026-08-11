@@ -9,11 +9,19 @@ export interface TargetConfigResponse {
   modelRoles?: Record<string, string>;
   modelFallback?: boolean;
   fallbackChains?: Record<string, string[]>;
+  defaultThinkingLevel?: string | null;
   [key: string]: unknown;
+}
+
+export interface OmpModelDetail {
+  selector: string;
+  reasoning?: boolean;
+  thinking?: string[] | null;
 }
 
 export interface ModelsResponse {
   models: string[];
+  modelDetails?: OmpModelDetail[];
   source: string;
   error?: string;
 }
