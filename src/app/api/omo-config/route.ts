@@ -170,8 +170,10 @@ export async function POST(request: NextRequest) {
         ...validatedConfig
       };
 
-      if (validatedConfig.reasoningEffort === null) {
-        delete updatedAgents[agentName].reasoningEffort;
+      for (const field of ['reasoning', 'reasoningEffort', 'variant'] as const) {
+        if (validatedConfig[field] === null) {
+          delete updatedAgents[agentName][field];
+        }
       }
       if (validatedConfig.fallback_models === null) {
         delete updatedAgents[agentName].fallback_models;
@@ -213,8 +215,10 @@ export async function POST(request: NextRequest) {
         ...validatedCategoryConfig
       };
 
-      if (validatedCategoryConfig.reasoningEffort === null) {
-        delete updatedCategories[categoryName].reasoningEffort;
+      for (const field of ['reasoning', 'reasoningEffort', 'variant'] as const) {
+        if (validatedCategoryConfig[field] === null) {
+          delete updatedCategories[categoryName][field];
+        }
       }
       if (validatedCategoryConfig.fallback_models === null) {
         delete updatedCategories[categoryName].fallback_models;

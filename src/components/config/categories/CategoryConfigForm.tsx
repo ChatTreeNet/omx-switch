@@ -6,6 +6,13 @@ import { Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { ModelSelector } from '../../ModelSelector';
 import { useModelsQuery, type ApiTarget } from '@/lib/queries';
 import { CategoryConfig } from '../../../types/omoConfig';
+import {
+  ModelVariantSelector,
+  ReasoningEffortSelector,
+  buildModelVariantConfigUpdate,
+  getConfiguredModelVariant,
+  type ModelVariantConfigUpdate,
+} from '../ModelVariantSelector';
 
 interface CategoryConfigFormData {
   model: string;
@@ -45,7 +52,7 @@ export function CategoryConfigForm({
   } = useForm<CategoryConfigFormData>({
     defaultValues: {
       model: initialConfig?.model || '',
-      variant: initialConfig?.variant || '',
+      variant: getConfiguredModelVariant(initialConfig),
       temperature: initialConfig?.temperature ?? 0.7,
       top_p: initialConfig?.top_p ?? 1,
       prompt_append: initialConfig?.prompt_append || '',
@@ -89,20 +96,19 @@ export function CategoryConfigForm({
       }
     }
 
-    type CategoryConfigPayload = Omit<CategoryConfig, 'reasoningEffort' | 'fallback_models'> & {
+    type CategoryConfigPayload = Omit<CategoryConfig, 'reasoning' | 'reasoningEffort' | 'variant' | 'fallback_models'> & ModelVariantConfigUpdate & {
       reasoningEffort?: CategoryConfig['reasoningEffort'] | null;
       fallback_models?: CategoryConfig['fallback_models'] | null;
     };
 
     const config: CategoryConfigPayload = {
       model: data.model || undefined,
-      variant: data.variant || undefined,
       temperature,
       top_p,
       prompt_append: data.prompt_append || undefined,
+      ...buildModelVariantConfigUpdate(initialConfig, data.variant),
+      reasoningEffort: data.reasoningEffort || null,
     };
-    if (data.reasoningEffort) config.reasoningEffort = data.reasoningEffort as CategoryConfig['reasoningEffort'];
-    else config.reasoningEffort = null;
     
     if (parsedFallback !== undefined) config.fallback_models = parsedFallback;
     else config.fallback_models = null;
@@ -189,60 +195,33 @@ export function CategoryConfigForm({
         </p>
       </div>
 
-      <div className="space-y-2">
-        <label htmlFor="variant-selector" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Variant
-        </label>
-        <Controller
-          name="variant"
-          control={control}
-          render={({ field }) => (
-            <select
-              id="variant-selector"
-              value={field.value}
-              onChange={(e) => field.onChange(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-            >
-              <option value="">Not set</option>
-              <option value="max">max</option>
-              <option value="high">high</option>
-              <option value="medium">medium</option>
-              <option value="low">low</option>
-              <option value="xhigh">xhigh</option>
-            </select>
-          )}
-        />
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Model reasoning variant. Higher values mean more thinking.
-        </p>
-      </div>
+      <Controller
+        name="variant"
+        control={control}
+        render={({ field }) => (
+          <ModelVariantSelector
+            id={`${apiTarget}-category-${categoryName}-variant-selector`}
+            model={watchedModel}
+            modelsData={modelsData}
+            value={field.value}
+            onValueChange={field.onChange}
+          />
+        )}
+      />
 
-      <div className="space-y-2">
-        <label htmlFor="reasoning-effort-selector" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Reasoning Effort
-        </label>
-        <Controller
-          name="reasoningEffort"
-          control={control}
-          render={({ field }) => (
-            <select
-              id="reasoning-effort-selector"
-              value={field.value}
-              onChange={(e) => field.onChange(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-            >
-              <option value="">Not set</option>
-              <option value="high">high</option>
-              <option value="medium">medium</option>
-              <option value="low">low</option>
-              <option value="max">max</option>
-            </select>
-          )}
-        />
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Controls the reasoning effort for compatible models like o1 or o3-mini.
-        </p>
-      </div>
+      <Controller
+        name="reasoningEffort"
+        control={control}
+        render={({ field }) => (
+          <ReasoningEffortSelector
+            id={`${apiTarget}-category-${categoryName}-reasoning-effort-selector`}
+            model={watchedModel}
+            modelsData={modelsData}
+            value={field.value}
+            onValueChange={field.onChange}
+          />
+        )}
+      />
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">

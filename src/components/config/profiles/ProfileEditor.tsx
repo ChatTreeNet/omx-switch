@@ -472,6 +472,8 @@ export function ProfileEditor({
                       <span className="text-zinc-400">→</span>
                       <span className="text-zinc-600 dark:text-zinc-400">
                         {agentConfig.model}
+                        {(agentConfig.reasoning || agentConfig.variant) && ` (${agentConfig.reasoning || agentConfig.variant})`}
+                        {agentConfig.reasoningEffort && ` [effort: ${agentConfig.reasoningEffort}]`}
                         {agentConfig.temperature !== undefined && ` temp: ${agentConfig.temperature}`}
                       </span>
                     </li>
@@ -501,7 +503,8 @@ export function ProfileEditor({
                       <span className="text-zinc-400">→</span>
                       <span className="text-zinc-600 dark:text-zinc-400">
                         {categoryConfig.model}
-                        {categoryConfig.variant && ` (${categoryConfig.variant})`}
+                        {(categoryConfig.reasoning || categoryConfig.variant) && ` (${categoryConfig.reasoning || categoryConfig.variant})`}
+                        {categoryConfig.reasoningEffort && ` [effort: ${categoryConfig.reasoningEffort}]`}
                         {categoryConfig.temperature !== undefined && ` temp: ${categoryConfig.temperature}`}
                       </span>
                     </li>

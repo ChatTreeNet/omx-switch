@@ -2,7 +2,7 @@ import { type ExecException } from 'child_process';
 
 export type ExecFn = (
   command: string,
-  options: { timeout: number; env: NodeJS.ProcessEnv },
+  options: { timeout: number; env: NodeJS.ProcessEnv; maxBuffer?: number },
   callback: (error: ExecException | null, stdout: string, stderr: string) => void
 ) => void;
 
@@ -34,17 +34,18 @@ export function handleExecResult(
 
   if (error) {
     console.error(`${logLabel} command failed`, {
-      message: error.message,
       code: error.code,
       signal: error.signal,
-      stderr: stderr || undefined,
-      stdoutPreview: stdout ? stdout.slice(0, 300) : undefined,
+      killed: error.killed || undefined,
+      stderrBytes: stderr ? Buffer.byteLength(stderr) : 0,
     });
-    return { models: [], source: 'error', error: error.message || 'Failed to fetch models from CLI' };
+    return { models: [], source: 'error', error: 'Failed to fetch models from CLI' };
   }
 
   if (stderr) {
-    console.warn(`${logLabel} stderr:`, stderr);
+    console.warn(`${logLabel} command emitted stderr`, {
+      stderrBytes: Buffer.byteLength(stderr),
+    });
   }
 
   try {
@@ -72,6 +73,8 @@ export interface ModelsCommandOptions {
   defaultTimeoutMs?: number;
   /** Extra directory prepended to PATH for the exec call */
   extraPath?: string;
+  /** Maximum stdout/stderr bytes buffered by exec */
+  maxBuffer?: number;
   /** Error message returned when the CLI binary is missing (ENOENT) */
   notFoundError?: string;
   /** Custom stdout parser; defaults to the provider/model line filter */
@@ -91,7 +94,7 @@ export function runModelsCommand(
     ? { ...process.env, PATH: `${options.extraPath}:${process.env.PATH}` }
     : { ...process.env };
 
-  getExecFn()(options.command, { timeout, env }, (error, stdout, stderr) => {
+  getExecFn()(options.command, { timeout, env, maxBuffer: options.maxBuffer }, (error, stdout, stderr) => {
     if (error) {
       console.error(`[${options.sourceName}-models] GET failed`, {
         timeout,
@@ -112,7 +115,9 @@ export function runModelsCommand(
 
     if (!effectiveError && options.parseStdout) {
       if (stderr) {
-        console.warn(`[${options.sourceName}-models] stderr:`, stderr);
+        console.warn(`[${options.sourceName}-models] command emitted stderr`, {
+          stderrBytes: Buffer.byteLength(stderr),
+        });
       }
       try {
         const models = options.parseStdout(stdout);
@@ -124,6 +129,11 @@ export function runModelsCommand(
       }
     } else {
       result = handleExecResult(effectiveError, stdout, stderr, options.sourceName);
+    }
+
+    if (killedByTimeout && effectiveError) {
+      // This message is generated locally above and contains no CLI output.
+      result.error = effectiveError.message;
     }
 
     if (error && options.notFoundError && /ENOENT|command not found/.test(error.message)) {

@@ -142,4 +142,32 @@ describe('CategoryConfigForm', () => {
     
     expect(handleSave).not.toHaveBeenCalled();
   });
+
+  it('saves a model-specific custom variant without changing reasoning effort', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      models: ['provider/custom'],
+      source: 'opencode',
+      modelDetails: [{ selector: 'provider/custom', variants: ['fast', 'deep'] }],
+    }));
+
+    const handleSave = vi.fn();
+    renderForm({
+      onSave: handleSave,
+      initialConfig: {
+        model: 'provider/custom',
+        variant: 'fast',
+        reasoningEffort: 'low',
+      },
+    });
+
+    fireEvent.change(await screen.findByLabelText('Model Variant'), { target: { value: 'deep' } });
+    fireEvent.click(screen.getByText(/save changes/i));
+
+    await waitFor(() => {
+      expect(handleSave).toHaveBeenCalledWith(expect.objectContaining({
+        variant: 'deep',
+        reasoningEffort: 'low',
+      }));
+    });
+  });
 });

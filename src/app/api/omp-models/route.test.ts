@@ -177,7 +177,7 @@ describe('/api/omp-models', () => {
     expect(data.error).toBe('OMP CLI not found');
   });
 
-  it('should return 503 with the raw error message for non-ENOENT failures', async () => {
+  it('returns a normalized error for non-ENOENT failures', async () => {
     mockExec.mockImplementation((_cmd: unknown, _opts: unknown, callback: ExecCallback) => {
       callback(new Error('timeout') as ExecException, '', '');
     });
@@ -187,7 +187,7 @@ describe('/api/omp-models', () => {
 
     expect(response.status).toBe(503);
     expect(data.source).toBe('error');
-    expect(data.error).toBe('timeout');
+    expect(data.error).toBe('Failed to fetch models from CLI');
   });
 
   it('should return 503 when the CLI emits non-JSON output', async () => {
