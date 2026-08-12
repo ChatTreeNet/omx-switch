@@ -68,12 +68,14 @@ describe('/api/omp-profiles/[id]/apply', () => {
     mockGetProfileById.mockResolvedValue(profile);
     mockReadProfileConfig.mockResolvedValue({
       modelRoles: { smol: 'openai/gpt-5.4-mini' },
+      defaultThinkingLevel: 'max',
       fallbackChains: { default: ['openai/gpt-5.4'] },
       modelFallback: false,
     });
     mockReadConfig.mockResolvedValue({
       setupVersion: 1,
       modelRoles: { default: 'kimi-code/k3' },
+      defaultThinkingLevel: 'low',
       retry: { enabled: true, fallbackChains: { smol: ['kimi-code/k3'] } },
       autoResume: true,
     });
@@ -86,6 +88,7 @@ describe('/api/omp-profiles/[id]/apply', () => {
     expect(mockWriteConfig).toHaveBeenCalledWith({
       setupVersion: 1,
       modelRoles: { default: 'kimi-code/k3', smol: 'openai/gpt-5.4-mini' },
+      defaultThinkingLevel: 'max',
       retry: {
         enabled: true,
         fallbackChains: { smol: ['kimi-code/k3'], default: ['openai/gpt-5.4'] },
@@ -94,6 +97,48 @@ describe('/api/omp-profiles/[id]/apply', () => {
       autoResume: true,
     });
     expect(mockSetActive).toHaveBeenCalledWith('fast');
+  });
+
+  it('clears the default thinking level when the profile stores null', async () => {
+    mockGetProfileById.mockResolvedValue(profile);
+    mockReadProfileConfig.mockResolvedValue({
+      modelRoles: {},
+      defaultThinkingLevel: null,
+    });
+    mockReadConfig.mockResolvedValue({
+      defaultThinkingLevel: 'high',
+      autoResume: true,
+      futureSetting: { enabled: true },
+    });
+
+    const response = await POST(new Request('http://localhost') as never, createParams('fast'));
+
+    expect(response.status).toBe(200);
+    expect(mockWriteConfig).toHaveBeenCalledWith({
+      modelRoles: {},
+      retry: { fallbackChains: {} },
+      autoResume: true,
+      futureSetting: { enabled: true },
+    });
+  });
+
+  it('keeps the current default thinking level when the profile omits it', async () => {
+    mockGetProfileById.mockResolvedValue(profile);
+    mockReadProfileConfig.mockResolvedValue({ modelRoles: {} });
+    mockReadConfig.mockResolvedValue({
+      defaultThinkingLevel: 'medium',
+      futureSetting: true,
+    });
+
+    const response = await POST(new Request('http://localhost') as never, createParams('fast'));
+
+    expect(response.status).toBe(200);
+    expect(mockWriteConfig).toHaveBeenCalledWith({
+      modelRoles: {},
+      defaultThinkingLevel: 'medium',
+      retry: { fallbackChains: {} },
+      futureSetting: true,
+    });
   });
 
   it('rolls back the config write when activation fails', async () => {

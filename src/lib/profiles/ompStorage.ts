@@ -4,6 +4,10 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { parse, stringify } from 'comment-json';
 import type { Profile, ProfileIndex } from '@/types/omoConfig';
+import {
+  isOmpDefaultThinkingLevel,
+  type OmpDefaultThinkingLevel,
+} from '@/lib/ompConfig';
 
 export const OMP_PROFILES_DIR = join(homedir(), '.omp', 'agent', 'profiles');
 export const OMP_PROFILE_INDEX_PATH = join(OMP_PROFILES_DIR, 'index.json');
@@ -13,6 +17,8 @@ export const OMP_PROFILE_INDEX_PATH = join(OMP_PROFILES_DIR, 'index.json');
  */
 export interface OmpProfileConfig {
   modelRoles?: Record<string, string>;
+  /** null explicitly clears the setting when this profile is applied. */
+  defaultThinkingLevel?: OmpDefaultThinkingLevel | null;
   fallbackChains?: Record<string, string[]>;
   modelFallback?: boolean;
   [key: string]: unknown;
@@ -58,6 +64,13 @@ export function normalizeOmpProfileConfig(config: unknown): OmpProfileConfig {
         Object.entries(config.modelRoles).filter(([, v]) => typeof v === 'string')
       ) as Record<string, string>
     : {};
+
+  if (
+    config.defaultThinkingLevel !== null
+    && !isOmpDefaultThinkingLevel(config.defaultThinkingLevel)
+  ) {
+    delete normalized.defaultThinkingLevel;
+  }
 
   if (isRecord(config.fallbackChains)) {
     normalized.fallbackChains = Object.fromEntries(

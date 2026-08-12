@@ -8,12 +8,31 @@ import { isPlainObject } from '@/lib/configValidation';
 export const CONFIG_DIR = join(homedir(), '.omp', 'agent');
 export const CONFIG_PATH = join(CONFIG_DIR, 'config.yml');
 
+export const OMP_DEFAULT_THINKING_LEVELS = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+  'auto',
+] as const;
+
+export type OmpDefaultThinkingLevel = (typeof OMP_DEFAULT_THINKING_LEVELS)[number];
+
+export function isOmpDefaultThinkingLevel(value: unknown): value is OmpDefaultThinkingLevel {
+  return typeof value === 'string'
+    && OMP_DEFAULT_THINKING_LEVELS.some((level) => level === value);
+}
+
 /**
- * OMP (Oh My Pi) config. Only modelRoles is typed; every other setting is
- * preserved opaquely so writes never drop fields the CLI manages.
+ * OMP (Oh My Pi) config. Only the settings managed by OMX Switch are typed;
+ * every other setting is preserved opaquely so writes never drop fields the
+ * CLI manages.
  */
 export interface OmpConfig {
   modelRoles?: Record<string, string>;
+  defaultThinkingLevel?: OmpDefaultThinkingLevel;
   [key: string]: unknown;
 }
 

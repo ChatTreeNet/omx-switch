@@ -49,8 +49,20 @@ describe('/api/omp-models', () => {
     mockExec.mockImplementation((_cmd: unknown, _opts: unknown, callback: ExecCallback) => {
       callback(null, JSON.stringify({
         models: [
-          { provider: 'kimi-code', id: 'k3', selector: 'kimi-code/k3' },
-          { provider: 'openai-codex', id: 'gpt-5.4', selector: 'openai-codex/gpt-5.4' },
+          {
+            provider: 'kimi-code',
+            id: 'k3',
+            selector: 'kimi-code/k3',
+            reasoning: true,
+            thinking: ['low', 'high', 'max'],
+          },
+          {
+            provider: 'openai-codex',
+            id: 'gpt-5.4',
+            selector: 'openai-codex/gpt-5.4',
+            reasoning: false,
+            thinking: null,
+          },
         ],
       }), '');
     });
@@ -62,6 +74,18 @@ describe('/api/omp-models', () => {
     expect(response.status).toBe(200);
     expect(data.source).toBe('omp');
     expect(data.models).toEqual(['kimi-code/k3', 'openai-codex/gpt-5.4']);
+    expect(data.modelDetails).toEqual([
+      {
+        selector: 'kimi-code/k3',
+        reasoning: true,
+        thinking: ['low', 'high', 'max'],
+      },
+      {
+        selector: 'openai-codex/gpt-5.4',
+        reasoning: false,
+        thinking: null,
+      },
+    ]);
     expect(call?.[0]).toBe('omp models --json');
     expect(call?.[1]?.timeout).toBe(60000);
     expect(typeof call?.[2]).toBe('function');
@@ -99,6 +123,44 @@ describe('/api/omp-models', () => {
     expect(response.status).toBe(200);
     expect(data.source).toBe('omp');
     expect(data.models).toEqual(['anthropic/claude-opus-4-6']);
+    expect(data.modelDetails).toEqual([{ selector: 'anthropic/claude-opus-4-6' }]);
+  });
+
+  it('should retain models while ignoring malformed capability metadata', async () => {
+    mockExec.mockImplementation((_cmd: unknown, _opts: unknown, callback: ExecCallback) => {
+      callback(null, JSON.stringify({
+        models: [
+          { selector: 'openai/gpt-valid', reasoning: true, thinking: ['minimal', 'xhigh'] },
+          { selector: 'openai/gpt-bad-reasoning', reasoning: 'yes', thinking: null },
+          { selector: 'openai/gpt-bad-thinking', reasoning: true, thinking: ['low', 42] },
+          { selector: 'openai/gpt-unknown-thinking', thinking: ['turbo'] },
+          { selector: 'openai/gpt-empty-thinking', reasoning: true, thinking: [] },
+          { selector: '   ' },
+          { provider: 'anthropic', id: '   ' },
+          null,
+          ['not', 'a', 'model'],
+        ],
+      }), '');
+    });
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.models).toEqual([
+      'openai/gpt-valid',
+      'openai/gpt-bad-reasoning',
+      'openai/gpt-bad-thinking',
+      'openai/gpt-unknown-thinking',
+      'openai/gpt-empty-thinking',
+    ]);
+    expect(data.modelDetails).toEqual([
+      { selector: 'openai/gpt-valid', reasoning: true, thinking: ['minimal', 'xhigh'] },
+      { selector: 'openai/gpt-bad-reasoning', thinking: null },
+      { selector: 'openai/gpt-bad-thinking', reasoning: true },
+      { selector: 'openai/gpt-unknown-thinking' },
+      { selector: 'openai/gpt-empty-thinking', reasoning: true, thinking: [] },
+    ]);
   });
 
   it('should return 503 with OMP CLI not found when the binary is missing', async () => {
@@ -139,6 +201,20 @@ describe('/api/omp-models', () => {
     expect(response.status).toBe(503);
     expect(data.source).toBe('error');
     expect(data.error).toBe('Failed to parse models output');
+  });
+
+  it('should return 503 when the JSON models field is malformed', async () => {
+    mockExec.mockImplementation((_cmd: unknown, _opts: unknown, callback: ExecCallback) => {
+      callback(null, '{"models":{"selector":"openai/gpt-5.4"}}', '');
+    });
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data.source).toBe('error');
+    expect(data.models).toEqual([]);
+    expect(data).not.toHaveProperty('modelDetails');
   });
 
   it('should return a timeout hint when the CLI is killed by the timeout', async () => {

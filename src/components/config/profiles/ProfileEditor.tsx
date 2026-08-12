@@ -94,6 +94,10 @@ export function ProfileEditor({
             }
           : {
               modelRoles: parsed.modelRoles || {},
+              defaultThinkingLevel:
+                typeof parsed.defaultThinkingLevel === 'string'
+                  ? parsed.defaultThinkingLevel
+                  : null,
               fallbackChains: parsed.fallbackChains,
               modelFallback: parsed.modelFallback,
             } as unknown as ProfileConfig;
@@ -136,9 +140,15 @@ export function ProfileEditor({
   const categoryCount = Object.keys(config.categories || {}).length;
   const roleCount = Object.keys((config as Record<string, unknown>).modelRoles || {}).length;
   const chainCount = Object.keys((config as Record<string, unknown>).fallbackChains || {}).length;
+  const defaultThinkingLevel = (config as Record<string, unknown>).defaultThinkingLevel;
+  const defaultThinkingLabel = defaultThinkingLevel === null
+    ? 'OMP default'
+    : typeof defaultThinkingLevel === 'string'
+      ? defaultThinkingLevel
+      : 'Keep current';
   const configSummary = isOmo
     ? `${agentCount} agent${agentCount !== 1 ? 's' : ''}, ${categoryCount} categor${categoryCount !== 1 ? 'ies' : 'y'} configured`
-    : `${roleCount} role${roleCount !== 1 ? 's' : ''}, ${chainCount} fallback chain${chainCount !== 1 ? 's' : ''} configured`;
+    : `${roleCount} role${roleCount !== 1 ? 's' : ''}, ${chainCount} fallback chain${chainCount !== 1 ? 's' : ''}, thinking: ${defaultThinkingLabel}`;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" aria-label="Profile editor form">
@@ -336,7 +346,7 @@ export function ProfileEditor({
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           {isOmo
             ? 'Import agent and category configurations from your current settings, or reset to the profile\'s original values.'
-            : 'Import role and fallback chain assignments from your current settings, or reset to the profile\'s original values.'}
+            : 'Import role, thinking level, and fallback chain settings from your current configuration, or reset to the profile\'s original values.'}
         </p>
       </div>
 
@@ -376,6 +386,15 @@ export function ProfileEditor({
         </button>
         {isConfigExpanded && !isOmo && (
           <div className="border-t border-zinc-200 dark:border-zinc-700 p-4 space-y-4">
+            <div>
+              <h5 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
+                Default Thinking Level
+              </h5>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                {defaultThinkingLabel}
+              </p>
+            </div>
+
             <div>
               <h5 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
                 Model Roles ({roleCount})
