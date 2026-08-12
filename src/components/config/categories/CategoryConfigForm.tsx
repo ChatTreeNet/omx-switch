@@ -8,7 +8,7 @@ import { useModelsQuery, type ApiTarget } from '@/lib/queries';
 import { CategoryConfig } from '../../../types/omoConfig';
 import {
   ModelVariantSelector,
-  ReasoningEffortSelector,
+  AdvancedReasoningEffortSelector,
   buildModelVariantConfigUpdate,
   getConfiguredModelVariant,
   type ModelVariantConfigUpdate,
@@ -72,6 +72,7 @@ export function CategoryConfigForm({
   );
 
   const watchedModel = useWatch({ control, name: 'model' });
+  const watchedVariant = useWatch({ control, name: 'variant' });
   const isModelInvalid = watchedModel && availableModels.size > 0 && !availableModels.has(watchedModel);
   const isModelMissing = !watchedModel;
 
@@ -213,11 +214,12 @@ export function CategoryConfigForm({
         name="reasoningEffort"
         control={control}
         render={({ field }) => (
-          <ReasoningEffortSelector
+          <AdvancedReasoningEffortSelector
             id={`${apiTarget}-category-${categoryName}-reasoning-effort-selector`}
             model={watchedModel}
             modelsData={modelsData}
             value={field.value}
+            variantValue={watchedVariant}
             onValueChange={field.onChange}
           />
         )}

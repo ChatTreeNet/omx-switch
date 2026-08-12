@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   ModelVariantSelector,
+  AdvancedReasoningEffortSelector,
   ReasoningEffortSelector,
   buildModelVariantConfigUpdate,
   getConfiguredModelVariant,
@@ -66,8 +67,8 @@ describe('ModelVariantSelector', () => {
       />
     );
 
-    expect(screen.getByLabelText('Model Variant')).toBeDisabled();
-    expect(screen.getByText(/no selectable variants/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Thinking Level')).toBeDisabled();
+    expect(screen.getByText(/no selectable thinking presets/i)).toBeInTheDocument();
   });
 
   it('preserves an unreported configured value and still allows clearing it', () => {
@@ -87,7 +88,7 @@ describe('ModelVariantSelector', () => {
     );
 
     expect(screen.getByRole('option', { name: /custom.*not reported/i })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Model Variant'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Thinking Level'), { target: { value: '' } });
     expect(onValueChange).toHaveBeenCalledWith('');
   });
 
@@ -103,7 +104,7 @@ describe('ModelVariantSelector', () => {
       />
     );
 
-    const input = screen.getByLabelText('Model Variant');
+    const input = screen.getByLabelText('Thinking Level');
     expect(input).toHaveAttribute('type', 'text');
     fireEvent.change(input, { target: { value: 'provider-custom' } });
     expect(onValueChange).toHaveBeenCalledWith('provider-custom');
@@ -120,8 +121,8 @@ describe('ModelVariantSelector', () => {
       />
     );
 
-    expect(screen.getByLabelText('Model Variant')).toHaveValue('legacy');
-    expect(screen.getByText(/configured variant is preserved/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Thinking Level')).toHaveValue('legacy');
+    expect(screen.getByText(/configured preset is preserved/i)).toBeInTheDocument();
   });
 });
 
@@ -198,6 +199,74 @@ describe('ReasoningEffortSelector', () => {
 
     expect(screen.getByLabelText(/reasoning effort/i)).not.toBeDisabled();
     expect(screen.getByText(/configured value is preserved/i)).toBeInTheDocument();
+  });
+});
+
+describe('AdvancedReasoningEffortSelector', () => {
+  const baseProps = {
+    id: 'advanced-effort',
+    model: 'openai/gpt-5',
+    modelsData: {
+      models: ['openai/gpt-5'],
+      source: 'opencode',
+      modelDetails: [{ selector: 'openai/gpt-5', reasoning: true, variants: ['low', 'high'] }],
+    },
+    onValueChange: () => {},
+  };
+
+  it('keeps the Provider override collapsed for ordinary configurations', () => {
+    render(
+      <AdvancedReasoningEffortSelector
+        {...baseProps}
+        value=""
+        variantValue="high"
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /advanced provider override/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText(/reasoning effort/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/most users should leave this unset/i)).toBeInTheDocument();
+  });
+
+  it('reveals the Provider override only after an explicit expansion', () => {
+    render(
+      <AdvancedReasoningEffortSelector
+        {...baseProps}
+        value=""
+        variantValue="high"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /advanced provider override/i }));
+    expect(screen.getByLabelText(/reasoning effort/i)).toBeInTheDocument();
+    expect(screen.queryByText(/both set/i)).not.toBeInTheDocument();
+  });
+
+  it('automatically exposes and labels an existing Provider override', () => {
+    render(
+      <AdvancedReasoningEffortSelector
+        {...baseProps}
+        value="high"
+        variantValue=""
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /advanced provider override/i })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Configured: high')).toBeInTheDocument();
+    expect(screen.getByLabelText(/reasoning effort/i)).toHaveValue('high');
+  });
+
+  it('warns without clearing when a preset and Provider override coexist', () => {
+    render(
+      <AdvancedReasoningEffortSelector
+        {...baseProps}
+        value="high"
+        variantValue="low"
+      />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(/model preset and a Provider override are both set/i);
+    expect(screen.getByLabelText(/reasoning effort/i)).toHaveValue('high');
   });
 });
 

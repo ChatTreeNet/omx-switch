@@ -68,8 +68,9 @@ describe('CategoryConfigForm', () => {
     );
 
     const handleSave = vi.fn();
-    renderForm({ onSave: handleSave });
+    renderForm({ onSave: handleSave, initialConfig: { model: 'test-model' } });
 
+    fireEvent.click(screen.getByRole('button', { name: /advanced provider override/i }));
     const effortSelect = screen.getByLabelText(/reasoning effort/i);
     fireEvent.change(effortSelect, { target: { value: 'high' } });
 
@@ -160,7 +161,7 @@ describe('CategoryConfigForm', () => {
       },
     });
 
-    fireEvent.change(await screen.findByLabelText('Model Variant'), { target: { value: 'deep' } });
+    fireEvent.change(await screen.findByLabelText('Thinking Level'), { target: { value: 'deep' } });
     fireEvent.click(screen.getByText(/save changes/i));
 
     await waitFor(() => {

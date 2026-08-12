@@ -115,6 +115,7 @@ describe('AgentConfigForm - echo bug fix', () => {
       expect(fallbackInput).toHaveValue(JSON.stringify([{ model: 'claude-3-5-sonnet-20240620', maxTokens: 4000 }], null, 2));
     });
 
+    await user.click(screen.getByRole('button', { name: /advanced provider override/i }));
     const reasoningSelector = screen.getByLabelText(/reasoning effort/i);
     await user.selectOptions(reasoningSelector, 'max');
 
@@ -186,7 +187,7 @@ describe('AgentConfigForm - echo bug fix', () => {
     const fallbackInput = screen.getByLabelText(/fallback models \(json\)/i);
     await user.clear(fallbackInput);
 
-    const reasoningSelector = screen.getByLabelText(/reasoning effort/i);
+    const reasoningSelector = await screen.findByLabelText(/reasoning effort/i);
     await user.selectOptions(reasoningSelector, '');
 
     const modelTrigger = screen.getAllByRole('combobox')[0];
@@ -244,7 +245,7 @@ describe('AgentConfigForm - echo bug fix', () => {
       </QueryClientProvider>
     );
 
-    const variantSelector = await screen.findByLabelText('Model Variant');
+    const variantSelector = await screen.findByLabelText('Thinking Level');
     expect(variantSelector).toContainElement(screen.getAllByRole('option', { name: 'max' })[0]);
     expect(Array.from((variantSelector as HTMLSelectElement).options).map((option) => option.value)).toEqual([
       '',

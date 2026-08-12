@@ -9,7 +9,7 @@ import type { AgentConfig } from '@/types/omoConfig';
 import { Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 import {
   ModelVariantSelector,
-  ReasoningEffortSelector,
+  AdvancedReasoningEffortSelector,
   buildModelVariantConfigUpdate,
   getConfiguredModelVariant,
   type ModelVariantConfigUpdate,
@@ -158,6 +158,7 @@ export function AgentConfigForm({
   const currentAgentConfig = config?.agents?.[agentName];
   const hasPresetConfig = !!currentAgentConfig?.model;
   const watchedModel = useWatch({ control, name: 'model' });
+  const watchedVariant = useWatch({ control, name: 'variant' });
 
   // Model status checks
   const currentModel = currentAgentConfig?.model;
@@ -273,11 +274,12 @@ export function AgentConfigForm({
         name="reasoningEffort"
         control={control}
         render={({ field }) => (
-          <ReasoningEffortSelector
+          <AdvancedReasoningEffortSelector
             id={`${apiTarget}-${agentName}-reasoning-effort-selector`}
             model={watchedModel}
             modelsData={modelsData}
             value={field.value}
+            variantValue={watchedVariant}
             onValueChange={field.onChange}
           />
         )}
