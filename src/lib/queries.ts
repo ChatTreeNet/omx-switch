@@ -13,15 +13,24 @@ export interface TargetConfigResponse {
   [key: string]: unknown;
 }
 
-export interface OmpModelDetail {
+export interface ModelDetail {
   selector: string;
   reasoning?: boolean;
+  variants?: string[];
+  thinking?: string[] | null;
+}
+
+export interface OmoModelDetail extends ModelDetail {
+  variants?: string[];
+}
+
+export interface OmpModelDetail extends ModelDetail {
   thinking?: string[] | null;
 }
 
 export interface ModelsResponse {
   models: string[];
-  modelDetails?: OmpModelDetail[];
+  modelDetails?: ModelDetail[];
   source: string;
   error?: string;
 }

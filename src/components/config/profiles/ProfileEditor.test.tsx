@@ -87,3 +87,38 @@ describe('ProfileEditor OMP configuration import', () => {
     }
   );
 });
+
+describe('ProfileEditor OMO configuration preview', () => {
+  it('shows model variant and provider effort for agents and categories', async () => {
+    const user = userEvent.setup();
+    render(
+      <ProfileEditor
+        profile={profile}
+        apiTarget="omo"
+        initialConfig={{
+          agents: {
+            sisyphus: {
+              model: 'openai/gpt-5',
+              reasoning: 'xhigh',
+              reasoningEffort: 'high',
+            },
+          },
+          categories: {
+            quick: {
+              model: 'anthropic/claude-haiku',
+              variant: 'max',
+              reasoningEffort: 'minimal',
+            },
+          },
+        }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /configuration details/i }));
+
+    expect(screen.getByText(/gpt-5 \(xhigh\) \[effort: high\]/i)).toBeInTheDocument();
+    expect(screen.getByText(/claude-haiku \(max\) \[effort: minimal\]/i)).toBeInTheDocument();
+  });
+});

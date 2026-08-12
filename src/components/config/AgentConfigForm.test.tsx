@@ -115,6 +115,7 @@ describe('AgentConfigForm - echo bug fix', () => {
       expect(fallbackInput).toHaveValue(JSON.stringify([{ model: 'claude-3-5-sonnet-20240620', maxTokens: 4000 }], null, 2));
     });
 
+    await user.click(screen.getByRole('button', { name: /advanced provider override/i }));
     const reasoningSelector = screen.getByLabelText(/reasoning effort/i);
     await user.selectOptions(reasoningSelector, 'max');
 
@@ -140,7 +141,6 @@ describe('AgentConfigForm - echo bug fix', () => {
           model: 'openai/gpt-4o',
           temperature: 0.5,
           top_p: 1,
-          variant: '',
           prompt_append: '',
           reasoningEffort: 'max',
           fallback_models: [{ model: 'claude-3-5-sonnet-20240620', maxTokens: 4000 }],
@@ -187,7 +187,7 @@ describe('AgentConfigForm - echo bug fix', () => {
     const fallbackInput = screen.getByLabelText(/fallback models \(json\)/i);
     await user.clear(fallbackInput);
 
-    const reasoningSelector = screen.getByLabelText(/reasoning effort/i);
+    const reasoningSelector = await screen.findByLabelText(/reasoning effort/i);
     await user.selectOptions(reasoningSelector, '');
 
     const modelTrigger = screen.getAllByRole('combobox')[0];
@@ -208,6 +208,63 @@ describe('AgentConfigForm - echo bug fix', () => {
     const requestBody = JSON.parse(String(postCall?.[1]?.body));
     expect(requestBody.agents.sisyphus.fallback_models).toBeNull();
     expect(requestBody.agents.sisyphus.reasoningEffort).toBeNull();
+  });
+
+  it('uses the selected model exact variants and preserves an unchanged legacy effort', async () => {
+    const user = userEvent.setup();
+
+    mockFetch.mockImplementation(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (url === '/api/omo-config' && (!init?.method || init.method === 'GET')) {
+        return jsonResponse({
+          agents: {
+            sisyphus: {
+              model: 'anthropic/claude-haiku',
+              variant: 'high',
+              reasoningEffort: 'minimal',
+            },
+          },
+          categories: {},
+        });
+      }
+      if (url === '/api/omo-models') {
+        return jsonResponse({
+          models: ['anthropic/claude-haiku', 'openai/gpt-5'],
+          source: 'opencode',
+          modelDetails: [
+            { selector: 'anthropic/claude-haiku', variants: ['high', 'max'] },
+            { selector: 'openai/gpt-5', variants: ['minimal', 'low', 'medium', 'high', 'xhigh'] },
+          ],
+        });
+      }
+      return jsonResponse({ success: true });
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AgentConfigForm agentName="sisyphus" apiTarget="omo" />
+      </QueryClientProvider>
+    );
+
+    const variantSelector = await screen.findByLabelText('Thinking Level');
+    expect(variantSelector).toContainElement(screen.getAllByRole('option', { name: 'max' })[0]);
+    expect(Array.from((variantSelector as HTMLSelectElement).options).map((option) => option.value)).toEqual([
+      '',
+      'high',
+      'max',
+    ]);
+    await user.selectOptions(variantSelector, 'max');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      const postCall = mockFetch.mock.calls.find((call) => call[0] === '/api/omo-config' && call[1]?.method === 'POST');
+      expect(postCall).toBeTruthy();
+    });
+    const postCall = mockFetch.mock.calls.find((call) => call[0] === '/api/omo-config' && call[1]?.method === 'POST');
+    const requestBody = JSON.parse(String(postCall?.[1]?.body));
+    expect(requestBody.agents.sisyphus).toEqual(expect.objectContaining({
+      variant: 'max',
+      reasoningEffort: 'minimal',
+    }));
   });
   it('shows a no-model hint when no model is configured', async () => {
     mockFetch

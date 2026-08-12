@@ -96,9 +96,8 @@ function getCategoryInfo(key: string): CategoryDefinition {
 }
 
 /** Format variant display */
-function formatVariant(variant?: string): string {
-  if (!variant) return '—';
-  return variant;
+function formatVariant(config: CategoryConfig): string {
+  return config.reasoning || config.variant || '—';
 }
 
 function formatProvider(model?: string): string {
@@ -136,7 +135,7 @@ function CategoryCard({
   onDelete,
 }: CategoryCardProps) {
   const info = getCategoryInfo(categoryKey);
-  const hasConfig = !!(config.model || config.variant);
+  const hasConfig = !!(config.model || config.reasoning || config.variant || config.reasoningEffort);
   const isModelInvalid = config.model && availableModels && availableModels.size > 0 && !availableModels.has(config.model);
   const fallbackModel = !hasConfig ? CATEGORY_FALLBACK_CHAINS[categoryKey]?.[0] : undefined;
   const displayModel = config.model || fallbackModel;
@@ -198,10 +197,16 @@ function CategoryCard({
             <span className="text-zinc-400 dark:text-zinc-500">Model:</span>{' '}
             {formatModel(displayModel)}
           </span>
-          {config.variant && (
+          {(config.reasoning || config.variant) && (
             <span className="text-zinc-600 dark:text-zinc-400">
               <span className="text-zinc-400 dark:text-zinc-500">Variant:</span>{' '}
-              {formatVariant(config.variant)}
+              {formatVariant(config)}
+            </span>
+          )}
+          {config.reasoningEffort && (
+            <span className="text-zinc-600 dark:text-zinc-400">
+              <span className="text-zinc-400 dark:text-zinc-500">Effort:</span>{' '}
+              {config.reasoningEffort}
             </span>
           )}
         </div>

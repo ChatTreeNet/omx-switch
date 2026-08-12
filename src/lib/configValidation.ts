@@ -165,13 +165,14 @@ export function validateAgentOrCategoryField(section: string, field: string, val
   switch (field) {
     case 'model':
       return validateStringField(section, field, value, { nonEmpty: true });
-    case 'variant':
     case 'prompt_append':
     case 'description':
     case 'category':
     case 'system':
       return validateStringField(section, field, value);
+    case 'reasoning':
     case 'reasoningEffort':
+    case 'variant':
       if (value === null) return null;
       return validateStringField(section, field, value);
     case 'temperature': {

@@ -375,20 +375,24 @@ describe('/api/omo-config', () => {
     expect(JSON.stringify(readbackData)).not.toContain('access_token');
   });
 
-  it('removes reasoningEffort and fallback_models when explicitly set to null, while preserving unknown safe fields', async () => {
+  it('removes clearable model options and fallback_models when explicitly set to null, while preserving unknown safe fields', async () => {
     mockReadConfig.mockResolvedValue(richV4Config);
     mockWriteConfig.mockResolvedValue();
 
     const response = await POST(createPostRequest({
       agents: {
         sisyphus: {
+          reasoning: null,
           reasoningEffort: null,
+          variant: null,
           fallback_models: null
         }
       },
       categories: {
         ultrabrain: {
+          reasoning: null,
           reasoningEffort: null,
+          variant: null,
           fallback_models: null
         }
       }
@@ -401,16 +405,20 @@ describe('/api/omo-config', () => {
     const writtenConfig = writeCall[0];
 
     expect(writtenConfig.agents!.sisyphus.reasoningEffort).toBeUndefined();
+    expect(writtenConfig.agents!.sisyphus.reasoning).toBeUndefined();
+    expect(writtenConfig.agents!.sisyphus.variant).toBeUndefined();
     expect(writtenConfig.agents!.sisyphus.fallback_models).toBeUndefined();
     
     expect(writtenConfig.categories!.ultrabrain.reasoningEffort).toBeUndefined();
+    expect(writtenConfig.categories!.ultrabrain.reasoning).toBeUndefined();
+    expect(writtenConfig.categories!.ultrabrain.variant).toBeUndefined();
     expect(writtenConfig.categories!.ultrabrain.fallback_models).toBeUndefined();
 
     expect(writtenConfig.agents!.sisyphus.future_agent_knob).toBeDefined();
     expect(writtenConfig.categories!.ultrabrain.future_category_knob).toBeDefined();
   });
 
-  it('rejects null for non-clearable fields like variant or prompt_append', async () => {
+  it('allows clearing variant but rejects null for non-clearable fields like prompt_append', async () => {
     mockReadConfig.mockResolvedValue(richV4Config);
     mockWriteConfig.mockResolvedValue();
 
@@ -425,7 +433,7 @@ describe('/api/omo-config', () => {
 
     const data = await response.json();
     expect(response.status).toBe(400);
-    expect(data.error).toContain('variant must be a string');
+    expect(data.error).toContain('prompt_append must be a string');
     
     expect(mockWriteConfig).not.toHaveBeenCalled();
   });

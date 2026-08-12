@@ -7,6 +7,8 @@ export interface FallbackModelObject {
   model?: string;
   /** Model variant (e.g., 'max', 'high', 'medium', 'low', 'xhigh') */
   variant?: string;
+  /** Forward-compatible canonical reasoning level used by the development schema */
+  reasoning?: string;
   /** Provider reasoning effort, including Oh My OpenAgent v4 'max' */
   reasoningEffort?: ReasoningEffort;
   /** Sampling temperature (0-2) */
@@ -37,6 +39,8 @@ export interface AgentConfig {
   model?: string;
   /** Model variant (e.g., 'max', 'high', 'medium', 'low', 'xhigh') */
   variant?: string;
+  /** Forward-compatible canonical reasoning level used by the development schema */
+  reasoning?: string;
   /** Provider reasoning effort, including Oh My OpenAgent v4 'max' */
   reasoningEffort?: ReasoningEffort;
   /** Sampling temperature (0-2) */
@@ -71,6 +75,8 @@ export interface CategoryConfig {
   model?: string;
   /** Model variant (e.g., 'max', 'high', 'medium', 'low', 'xhigh') */
   variant?: string;
+  /** Forward-compatible canonical reasoning level used by the development schema */
+  reasoning?: string;
   /** Provider reasoning effort, including Oh My OpenAgent v4 'max' */
   reasoningEffort?: ReasoningEffort;
   /** Sampling temperature (0-2) */

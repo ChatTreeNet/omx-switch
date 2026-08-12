@@ -1,12 +1,19 @@
 'use client';
 
 import * as React from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ModelSelector } from '../ModelSelector';
 import { useConfigQuery, useModelsQuery, type ApiTarget } from '@/lib/queries';
 import type { AgentConfig } from '@/types/omoConfig';
 import { Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
+import {
+  ModelVariantSelector,
+  AdvancedReasoningEffortSelector,
+  buildModelVariantConfigUpdate,
+  getConfiguredModelVariant,
+  type ModelVariantConfigUpdate,
+} from './ModelVariantSelector';
 
 interface AgentConfigFormData {
   model: string;
@@ -69,7 +76,7 @@ export function AgentConfigForm({
         model: currentAgentConfig.model || '',
         temperature: currentAgentConfig.temperature ?? 0.7,
         top_p: currentAgentConfig.top_p ?? 1,
-        variant: currentAgentConfig.variant || '',
+        variant: getConfiguredModelVariant(currentAgentConfig),
         prompt_append: currentAgentConfig.prompt_append || '',
         reasoningEffort: currentAgentConfig.reasoningEffort || '',
         fallbackModelsObj: currentAgentConfig.fallback_models,
@@ -127,20 +134,20 @@ export function AgentConfigForm({
       }
     }
 
-    type AgentConfigPayload = Omit<AgentConfig, 'reasoningEffort' | 'fallback_models'> & {
+    type AgentConfigPayload = Omit<AgentConfig, 'reasoning' | 'reasoningEffort' | 'variant' | 'fallback_models'> & ModelVariantConfigUpdate & {
       reasoningEffort?: AgentConfig['reasoningEffort'] | null;
       fallback_models?: AgentConfig['fallback_models'] | null;
     };
 
+    const currentAgentConfig = config?.agents?.[agentName];
     const payload: AgentConfigPayload = {
       model: data.model,
       temperature: data.temperature,
       top_p: data.top_p,
-      variant: data.variant,
       prompt_append: data.prompt_append,
+      ...buildModelVariantConfigUpdate(currentAgentConfig, data.variant),
+      reasoningEffort: data.reasoningEffort || null,
     };
-    if (data.reasoningEffort) payload.reasoningEffort = data.reasoningEffort as AgentConfig['reasoningEffort'];
-    else payload.reasoningEffort = null;
     
     if (parsedFallback !== undefined) payload.fallback_models = parsedFallback;
     else payload.fallback_models = null;
@@ -150,6 +157,8 @@ export function AgentConfigForm({
 
   const currentAgentConfig = config?.agents?.[agentName];
   const hasPresetConfig = !!currentAgentConfig?.model;
+  const watchedModel = useWatch({ control, name: 'model' });
+  const watchedVariant = useWatch({ control, name: 'variant' });
 
   // Model status checks
   const currentModel = currentAgentConfig?.model;
@@ -171,7 +180,9 @@ export function AgentConfigForm({
         <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 dark:bg-blue-900/20 dark:border-blue-800">
           <p className="text-sm text-blue-800 dark:text-blue-300">
             <span className="font-medium">Preset applied:</span> This agent is configured with model <span className="font-mono bg-blue-100 dark:bg-blue-800 px-1.5 py-0.5 rounded">{currentAgentConfig.model}</span>
-            {currentAgentConfig.variant && <span> (variant: {currentAgentConfig.variant})</span>}
+            {getConfiguredModelVariant(currentAgentConfig) && (
+              <span> (variant: {getConfiguredModelVariant(currentAgentConfig)})</span>
+            )}
           </p>
         </div>
       )}
@@ -245,60 +256,34 @@ export function AgentConfigForm({
         </p>
       </div>
 
-      <div className="space-y-2">
-        <label htmlFor="variant-selector" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Variant
-        </label>
-        <Controller
-          name="variant"
-          control={control}
-          render={({ field }) => (
-            <select
-              id="variant-selector"
-              value={field.value}
-              onChange={(e) => field.onChange(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-            >
-              <option value="">Not set</option>
-              <option value="max">max</option>
-              <option value="high">high</option>
-              <option value="medium">medium</option>
-              <option value="low">low</option>
-              <option value="xhigh">xhigh</option>
-            </select>
-          )}
-        />
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Model reasoning variant. Higher values mean more thinking.
-        </p>
-      </div>
+      <Controller
+        name="variant"
+        control={control}
+        render={({ field }) => (
+          <ModelVariantSelector
+            id={`${apiTarget}-${agentName}-variant-selector`}
+            model={watchedModel}
+            modelsData={modelsData}
+            value={field.value}
+            onValueChange={field.onChange}
+          />
+        )}
+      />
 
-      <div className="space-y-2">
-        <label htmlFor="reasoning-effort-selector" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Reasoning Effort
-        </label>
-        <Controller
-          name="reasoningEffort"
-          control={control}
-          render={({ field }) => (
-            <select
-              id="reasoning-effort-selector"
-              value={field.value}
-              onChange={(e) => field.onChange(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-            >
-              <option value="">Not set</option>
-              <option value="high">high</option>
-              <option value="medium">medium</option>
-              <option value="low">low</option>
-              <option value="max">max</option>
-            </select>
-          )}
-        />
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Controls the reasoning effort for compatible models like o1 or o3-mini.
-        </p>
-      </div>
+      <Controller
+        name="reasoningEffort"
+        control={control}
+        render={({ field }) => (
+          <AdvancedReasoningEffortSelector
+            id={`${apiTarget}-${agentName}-reasoning-effort-selector`}
+            model={watchedModel}
+            modelsData={modelsData}
+            value={field.value}
+            variantValue={watchedVariant}
+            onValueChange={field.onChange}
+          />
+        )}
+      />
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
