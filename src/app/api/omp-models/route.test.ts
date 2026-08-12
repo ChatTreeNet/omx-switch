@@ -88,6 +88,7 @@ describe('/api/omp-models', () => {
     ]);
     expect(call?.[0]).toBe('omp models --json');
     expect(call?.[1]?.timeout).toBe(60000);
+    expect(call?.[1]).not.toHaveProperty('maxBuffer');
     expect(typeof call?.[2]).toBe('function');
   });
 

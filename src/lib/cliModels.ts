@@ -94,7 +94,12 @@ export function runModelsCommand(
     ? { ...process.env, PATH: `${options.extraPath}:${process.env.PATH}` }
     : { ...process.env };
 
-  getExecFn()(options.command, { timeout, env, maxBuffer: options.maxBuffer }, (error, stdout, stderr) => {
+  const execOptions: { timeout: number; env: NodeJS.ProcessEnv; maxBuffer?: number } = { timeout, env };
+  if (options.maxBuffer !== undefined) {
+    execOptions.maxBuffer = options.maxBuffer;
+  }
+
+  getExecFn()(options.command, execOptions, (error, stdout, stderr) => {
     if (error) {
       console.error(`[${options.sourceName}-models] GET failed`, {
         timeout,
