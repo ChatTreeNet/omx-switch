@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import type { ExecException } from 'child_process';
+import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { delimiter, join } from 'path';
 import { setExecFn } from '@/lib/cliModels';
 import { GET } from './route';
 
@@ -240,5 +243,78 @@ describe('/api/omp-models', () => {
     expect(response.status).toBe(503);
     expect(data.source).toBe('error');
     expect(data.models).toEqual([]);
+  });
+});
+
+describe.skipIf(process.platform === 'win32')('/api/omp-models CLI discovery', () => {
+  let home: string;
+
+  async function installCli(installDir: string, selector: string) {
+    const bin = join(installDir, 'bin');
+    await mkdir(bin, { recursive: true });
+    await writeFile(
+      join(bin, 'omp'),
+      `#!/usr/bin/env bun\nconsole.log(JSON.stringify({ models: [{ selector: ${JSON.stringify(selector)}, kind: 'chat' }] }));\n`,
+      { mode: 0o755 }
+    );
+    await writeFile(
+      join(bin, 'bun'),
+      '#!/bin/sh\nexec "$OMP_TEST_NODE" "$@"\n',
+      { mode: 0o755 }
+    );
+    return bin;
+  }
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'omp-cli-discovery-'));
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('PATH', ['/usr/bin', '/bin'].join(delimiter));
+    vi.stubEnv('BUN_INSTALL', undefined);
+    vi.stubEnv('OMP_TEST_NODE', process.execPath);
+    setExecFn(null);
+  });
+
+  afterEach(async () => {
+    setExecFn(null);
+    vi.unstubAllEnvs();
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it('loads models when the standard Bun install and its runtime are absent from PATH', async () => {
+    await installCli(join(home, '.bun'), 'fixture/standard');
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.models).toEqual(['fixture/standard']);
+  });
+
+  it('uses BUN_INSTALL before the default install when neither is in PATH', async () => {
+    await installCli(join(home, '.bun'), 'fixture/standard');
+    const customInstall = join(home, 'custom bun');
+    await installCli(customInstall, 'fixture/custom');
+    vi.stubEnv('BUN_INSTALL', customInstall);
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.models).toEqual(['fixture/custom']);
+  });
+
+  it('preserves an existing PATH-selected OMP installation', async () => {
+    await installCli(join(home, '.bun'), 'fixture/standard');
+    const customInstall = join(home, 'custom');
+    await installCli(customInstall, 'fixture/custom');
+    vi.stubEnv('BUN_INSTALL', customInstall);
+    const preferredBin = await installCli(join(home, 'preferred'), 'fixture/preferred');
+    vi.stubEnv('PATH', [preferredBin, '/usr/bin', '/bin'].join(delimiter));
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.models).toEqual(['fixture/preferred']);
   });
 });

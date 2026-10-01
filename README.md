@@ -25,6 +25,11 @@ npx omx-switch
 Then open [http://localhost:3457](http://localhost:3457). Press `Ctrl+C` to stop
 the server.
 
+OMP model listing searches the inherited `PATH` first, then `$BUN_INSTALL/bin`
+when configured, and finally `~/.bun/bin`. These fallback directories let OMX
+find both `omp` and its Bun runtime without changing the installation selected
+by your existing `PATH`. Other custom installation directories must be on `PATH`.
+
 ## Develop
 
 ```bash
