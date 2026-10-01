@@ -1,4 +1,5 @@
 import { type ExecException } from 'child_process';
+import { delimiter } from 'path';
 
 export type ExecFn = (
   command: string,
@@ -73,6 +74,8 @@ export interface ModelsCommandOptions {
   defaultTimeoutMs?: number;
   /** Extra directory prepended to PATH for the exec call */
   extraPath?: string;
+  /** Installation directories searched after the inherited PATH */
+  fallbackPaths?: readonly string[];
   /** Maximum stdout/stderr bytes buffered by exec */
   maxBuffer?: number;
   /** Error message returned when the CLI binary is missing (ENOENT) */
@@ -93,6 +96,11 @@ export function runModelsCommand(
   const env = options.extraPath
     ? { ...process.env, PATH: `${options.extraPath}:${process.env.PATH}` }
     : { ...process.env };
+  if (options.fallbackPaths?.length) {
+    env.PATH = [env.PATH, ...options.fallbackPaths]
+      .filter((entry) => entry !== undefined)
+      .join(delimiter);
+  }
 
   const execOptions: { timeout: number; env: NodeJS.ProcessEnv; maxBuffer?: number } = { timeout, env };
   if (options.maxBuffer !== undefined) {

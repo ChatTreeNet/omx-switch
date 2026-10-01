@@ -1,3 +1,5 @@
+import { homedir } from 'os';
+import { join } from 'path';
 import { NextResponse } from 'next/server';
 import { runModelsCommand } from '@/lib/cliModels';
 import type { OmpModelDetail } from '@/lib/queries';
@@ -83,6 +85,10 @@ function parseOmpModelsJson(stdout: string): ParsedOmpModels {
 
 export async function GET(): Promise<Response> {
   let modelDetails: OmpModelDetail[] = [];
+  const bunBin = join(homedir(), '.bun', 'bin');
+  const fallbackPaths = process.env.BUN_INSTALL
+    ? [join(process.env.BUN_INSTALL, 'bin'), bunBin]
+    : [bunBin];
   const { result, status } = await runModelsCommand({
     command: 'omp models --json --kind all',
     sourceName: 'omp',
@@ -90,6 +96,7 @@ export async function GET(): Promise<Response> {
     // Cold catalog refreshes can take 30s+; the default 15s kills them
     defaultTimeoutMs: 60000,
     notFoundError: 'OMP CLI not found',
+    fallbackPaths,
     parseStdout: (stdout) => {
       const parsed = parseOmpModelsJson(stdout);
       modelDetails = parsed.modelDetails;
