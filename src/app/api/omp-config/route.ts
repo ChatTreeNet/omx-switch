@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  getConfigPath,
   isOmpDefaultThinkingLevel,
   readConfig,
   writeConfig,
@@ -47,6 +48,7 @@ export async function GET() {
 
     return NextResponse.json({
       ...safeConfig,
+      configPath: getConfigPath(),
       modelRoles,
       defaultThinkingLevel: isOmpDefaultThinkingLevel(config.defaultThinkingLevel)
         ? config.defaultThinkingLevel

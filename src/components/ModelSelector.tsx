@@ -18,6 +18,8 @@ interface ModelSelectorProps {
   placeholder?: string;
   apiTarget: ApiTarget;
   ariaLabel?: string;
+  /** Limit OMP choices to catalog kinds compatible with the workload. */
+  modelKinds?: readonly string[];
 }
 
 const SelectTrigger = React.forwardRef<
@@ -123,6 +125,7 @@ export function ModelSelector({
   disabled = false,
   apiTarget,
   ariaLabel,
+  modelKinds,
 }: ModelSelectorProps) {
   const [searchQuery, setSearchQuery] = React.useState('');
   const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -132,12 +135,22 @@ export function ModelSelector({
   // Ensure the currently selected model is in the list (for echo display)
   const allModels = React.useMemo(() => {
     const models = data?.models ?? [];
-    const modelSet = new Set(models);
+    const kindByModel = Object.fromEntries(
+      (data?.modelDetails ?? []).map((detail) => [detail.selector, detail.kind])
+    );
+    const modelSet = new Set(
+      modelKinds
+        ? models.filter((model) => {
+            const kind = kindByModel[model];
+            return kind === undefined || modelKinds.includes(kind);
+          })
+        : models
+    );
     if (value && !modelSet.has(value)) {
       modelSet.add(value);
     }
     return Array.from(modelSet).sort();
-  }, [data?.models, value]);
+  }, [data?.models, data?.modelDetails, modelKinds, value]);
 
   const filteredModels = React.useMemo(() => {
     if (!searchQuery.trim()) return allModels;

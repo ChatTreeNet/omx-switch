@@ -56,6 +56,8 @@ function getThinkingOptions(
     // An unavailable selector may be a literal model ID ending in a token such
     // as `:max`. Keep it opaque so editing cannot silently rewrite the ID.
     options = [];
+  } else if (detail?.kind !== undefined && detail.kind !== 'chat') {
+    options = [];
   } else if (!hasCapabilityMetadata) {
     // Older OMP versions do not include capability metadata. Keep the full
     // selector surface available instead of making thinking unconfigurable.
@@ -87,27 +89,33 @@ interface RoleDefinition {
   key: string;
   name: string;
   description: string;
+  modelKinds?: readonly string[];
+  thinking?: false;
   /** What an unset role resolves to, per pi-coding-agent model-resolver */
   unsetNote: string;
 }
 
-// Built-in roles from @oh-my-pi/pi-coding-agent model-roles; custom roles
-// found in config.yml are appended below these. unsetNote mirrors the real
-// resolution semantics in src/config/model-resolver.ts + priority.json:
-// only smol/slow/designer inherit the default role's model; advisor reuses
-// the slow chain (never default); tiny reuses the smol chain; other roles
-// have no configured fallback.
+const CHAT_KINDS = ['chat'] as const;
+const TINY_KINDS = ['chat', 'tiny'] as const;
+
+// Built-ins from OMP 18.4.8's model-roles.ts. Removed built-ins (e.g.
+// designer) remain editable when present as custom roles in the config.
 const BUILT_IN_ROLES: RoleDefinition[] = [
   { key: 'default', name: 'Default', description: 'Primary model for the main agent', unsetNote: 'Not set' },
   { key: 'smol', name: 'Smol', description: 'Fast/cheap model for lightweight tasks', unsetNote: 'Not set (inherits default)' },
   { key: 'slow', name: 'Slow', description: 'Reasoning model for thorough analysis', unsetNote: 'Not set (inherits default)' },
   { key: 'plan', name: 'Plan', description: 'Model for architectural planning', unsetNote: 'Not set' },
   { key: 'vision', name: 'Vision', description: 'Model for image analysis', unsetNote: 'Not set' },
-  { key: 'designer', name: 'Designer', description: 'Model for design work', unsetNote: 'Not set (inherits default)' },
   { key: 'commit', name: 'Commit', description: 'Model for commit message generation', unsetNote: 'Not set' },
   { key: 'task', name: 'Task', description: 'Model for spawned subagents', unsetNote: 'Not set' },
   { key: 'advisor', name: 'Advisor', description: 'Passive reviewer that injects notes', unsetNote: "Not set (uses slow's chain)" },
-  { key: 'tiny', name: 'Tiny', description: 'Smallest model for trivial operations', unsetNote: "Not set (uses smol's chain)" },
+  { key: 'tiny', name: 'Tiny', description: 'Smallest model for trivial operations', unsetNote: "Not set (uses smol's chain)", modelKinds: TINY_KINDS },
+  { key: 'memory', name: 'Memory', description: 'Model for memory extraction', unsetNote: 'Not set (uses tiny)', modelKinds: TINY_KINDS },
+  { key: 'image', name: 'Image', description: 'Image generation model', unsetNote: 'OMP automatic selection', modelKinds: ['image'], thinking: false },
+  { key: 'web', name: 'Web', description: 'Search runner or search-capable chat model', unsetNote: 'OMP automatic selection', modelKinds: ['search', 'chat'], thinking: false },
+  { key: 'speech', name: 'Speech', description: 'Text-to-speech model', unsetNote: 'OMP automatic selection', modelKinds: ['tts'], thinking: false },
+  { key: 'dictation', name: 'Dictation', description: 'Speech-to-text model', unsetNote: 'OMP automatic selection', modelKinds: ['stt'], thinking: false },
+  { key: 'judge', name: 'Judge', description: 'Judgment runner or tiny/chat model', unsetNote: 'OMP automatic selection', modelKinds: ['judge', 'tiny', 'chat'], thinking: false },
 ];
 
 export function ModelRolesPanel() {
@@ -182,13 +190,23 @@ export function ModelRolesPanel() {
     const known = new Set(BUILT_IN_ROLES.map((r) => r.key));
     const custom = new Set<string>();
     for (const key of Object.keys(configuredRoles)) custom.add(key);
+    const tags = configQuery.data?.modelTags;
+    if (tags && typeof tags === 'object' && !Array.isArray(tags)) {
+      for (const key of Object.keys(tags)) custom.add(key);
+    }
+    const cycleOrder = configQuery.data?.cycleOrder;
+    if (Array.isArray(cycleOrder)) {
+      for (const key of cycleOrder) {
+        if (typeof key === 'string') custom.add(key);
+      }
+    }
     for (const key of Object.keys(configuredChains)) custom.add(key);
     const extras = Array.from(custom)
       .filter((key) => !known.has(key))
       .sort()
       .map((key) => ({ key, name: key, description: 'Custom role', unsetNote: 'Not set' }));
     return [...BUILT_IN_ROLES, ...extras];
-  }, [configuredRoles, configuredChains]);
+  }, [configuredRoles, configuredChains, configQuery.data]);
 
   const saveMutation = useMutation({
     mutationFn: async (payload: {
@@ -274,12 +292,9 @@ export function ModelRolesPanel() {
 
   const handleModelChange = (role: string, currentValue: string, model: string) => {
     const { thinkingLevel } = splitRoleModelValue(currentValue, availableModels);
-    const supportedOptions = getThinkingOptions(
-      model,
-      availableModels,
-      modelDetails,
-      thinkingLevel
-    );
+    const supportedOptions = roles.find((entry) => entry.key === role)?.thinking === false
+      ? []
+      : getThinkingOptions(model, availableModels, modelDetails, '');
     const nextThinkingLevel = supportedOptions.includes(thinkingLevel as RoleThinkingLevel)
       ? thinkingLevel
       : '';
@@ -402,9 +417,10 @@ export function ModelRolesPanel() {
 
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
         Assign a model and optional thinking override to each OMP role. Unset thinking
-        inherits the global default. Unset smol/slow/designer roles inherit the default model;
-        advisor and tiny reuse the slow and smol chains. Expand a role to edit its ordered
-        fallback chain, tried when the primary model fails.
+        inherits the global default. Unset smol/slow roles inherit the default model;
+        advisor, tiny, and memory use the slow, smol, and tiny selections respectively.
+        Image, web, speech, dictation, and judge roles do not use thinking suffixes.
+        Expand a role to edit its ordered retry fallback chain.
       </p>
 
       {configQuery.isLoading ? (
@@ -425,8 +441,10 @@ export function ModelRolesPanel() {
               ? ''
               : (selections[role.key] ?? configuredRoles[role.key] ?? '');
             const { model: currentModel, thinkingLevel: currentThinkingLevel } =
-              splitRoleModelValue(currentRoleValue, availableModels);
-            const thinkingOptions = getThinkingOptions(
+              role.thinking === false
+                ? { model: currentRoleValue, thinkingLevel: '' as const }
+                : splitRoleModelValue(currentRoleValue, availableModels);
+            const thinkingOptions = role.thinking === false ? [] : getThinkingOptions(
               currentModel,
               availableModels,
               modelDetails,
@@ -452,6 +470,7 @@ export function ModelRolesPanel() {
                   <div className="min-w-64 flex-1">
                     <ModelSelector
                       apiTarget="omp"
+                      modelKinds={role.modelKinds ?? CHAT_KINDS}
                       value={currentModel}
                       onValueChange={(model) =>
                         handleModelChange(role.key, currentRoleValue, model)

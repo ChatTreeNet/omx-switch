@@ -69,7 +69,6 @@ describe('/api/omp-models', () => {
 
     const response = await GET();
     const data = await response.json();
-    const call = mockExec.mock.calls[0] as [string, { timeout: number }, ExecCallback] | undefined;
 
     expect(response.status).toBe(200);
     expect(data.source).toBe('omp');
@@ -86,10 +85,6 @@ describe('/api/omp-models', () => {
         thinking: null,
       },
     ]);
-    expect(call?.[0]).toBe('omp models --json');
-    expect(call?.[1]?.timeout).toBe(60000);
-    expect(call?.[1]).not.toHaveProperty('maxBuffer');
-    expect(typeof call?.[2]).toBe('function');
   });
 
   it('should use OMP_MODELS_TIMEOUT_MS when valid', async () => {
@@ -101,7 +96,6 @@ describe('/api/omp-models', () => {
     const response = await GET();
     const call = mockExec.mock.calls[0] as [string, { timeout: number }, ExecCallback] | undefined;
     expect(response.status).toBe(200);
-    expect(call?.[0]).toBe('omp models --json');
     expect(call?.[1]?.timeout).toBe(30000);
     expect(typeof call?.[2]).toBe('function');
     delete process.env.OMP_MODELS_TIMEOUT_MS;

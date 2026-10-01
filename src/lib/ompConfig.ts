@@ -1,12 +1,54 @@
 import { readFile, writeFile } from 'fs/promises';
 import { existsSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 import { homedir } from 'os';
 import { parse, stringify } from 'yaml';
 import { isPlainObject } from '@/lib/configValidation';
 
-export const CONFIG_DIR = join(homedir(), '.omp', 'agent');
-export const CONFIG_PATH = join(CONFIG_DIR, 'config.yml');
+function normalizeProfileName(value: string | undefined): string | undefined {
+  const profile = value?.trim();
+  if (!profile || profile === 'default') return undefined;
+  if (
+    !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(profile)
+    || profile === '.'
+    || profile === '..'
+    || profile.endsWith('.')
+    || /^(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:\..*)?$/i.test(profile)
+  ) {
+    throw new Error(`Invalid OMP profile: "${value}"`);
+  }
+  return profile;
+}
+
+/** Match OMP 18's active profile and agent-directory precedence. */
+export function getConfigDir(): string {
+  const root = join(homedir(), process.env.PI_CONFIG_DIR || '.omp');
+  const profile = normalizeProfileName(process.env.OMP_PROFILE ?? process.env.PI_PROFILE);
+  if (profile) return join(root, 'profiles', profile, 'agent');
+
+  const override = process.env.PI_CODING_AGENT_DIR;
+  // OMP propagates a profile-derived directory to child processes. An explicit
+  // default profile must not adopt that inherited directory as an override.
+  let inheritedProfile: string | undefined;
+  try {
+    inheritedProfile = normalizeProfileName(process.env.PI_PROFILE);
+  } catch {
+    // A bypassed legacy variable does not invalidate the canonical selection.
+  }
+  if (
+    override
+    && !(inheritedProfile && override === join(root, 'profiles', inheritedProfile, 'agent'))
+  ) {
+    return resolve(override);
+  }
+  return join(root, 'agent');
+}
+
+export function getConfigPath(configDir: string = getConfigDir()): string {
+  const canonical = join(configDir, 'config.yml');
+  const alternate = join(configDir, 'config.yaml');
+  return existsSync(canonical) || !existsSync(alternate) ? canonical : alternate;
+}
 
 export const OMP_DEFAULT_THINKING_LEVELS = [
   'minimal',
@@ -36,7 +78,7 @@ export interface OmpConfig {
   [key: string]: unknown;
 }
 
-export function detectConfig(configPath: string = CONFIG_PATH): boolean {
+export function detectConfig(configPath: string = getConfigPath()): boolean {
   try {
     return existsSync(configPath);
   } catch {
@@ -44,13 +86,13 @@ export function detectConfig(configPath: string = CONFIG_PATH): boolean {
   }
 }
 
-export async function readConfig(configPath: string = CONFIG_PATH): Promise<OmpConfig> {
+export async function readConfig(configPath: string = getConfigPath()): Promise<OmpConfig> {
   let content: string;
   try {
     content = await readFile(configPath, 'utf-8');
-  } catch {
-    // Missing or unreadable file is treated as "no config"
-    return {};
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    throw new Error(`Failed to read OMP config at ${configPath}: ${error}`);
   }
 
   try {
@@ -71,7 +113,7 @@ export async function readConfig(configPath: string = CONFIG_PATH): Promise<OmpC
 
 export async function writeConfig(
   config: OmpConfig,
-  configPath: string = CONFIG_PATH
+  configPath: string = getConfigPath()
 ): Promise<void> {
   try {
     const configDir = dirname(configPath);
