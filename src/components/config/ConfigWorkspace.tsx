@@ -185,7 +185,7 @@ export function ConfigWorkspace({ apiTarget }: ConfigWorkspaceProps) {
                 Model Roles
               </h2>
               <p className="text-zinc-500 dark:text-zinc-400">
-                Assign models to OMP roles in ~/.omp/agent/config.yml
+                Assign models to OMP roles in {configData?.configPath ?? 'the active OMP config'}
               </p>
             </div>
             <ModelRolesPanel />

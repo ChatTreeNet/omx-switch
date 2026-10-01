@@ -10,10 +10,10 @@ OMO/OMP CLI model listing, and the OMO upstream staleness check.
 ```text
 src/app/api/
 ├── omo-config/    # GET/POST ~/.config/opencode/oh-my-openagent.jsonc (secret-filtered)
-├── omp-config/    # GET/POST ~/.omp/agent/config.yml modelRoles (secret-filtered)
+├── omp-config/    # GET/POST active profile config.yml/config.yaml modelRoles (secret-filtered)
 ├── omo-models/    # GET model list from `opencode models`
-├── omp-models/    # GET model list from `omp models --json`
-├── omp-profiles/  # OMP profile CRUD, apply, import/export (~/.omp/agent/profiles)
+├── omp-models/    # GET all model kinds from `omp models --json --kind all`
+├── omp-profiles/  # OMP saved model profiles in the active agent directory's profiles/
 └── omo-sync/      # GET staleness of github.com/code-yeongyu/oh-my-openagent (60-day threshold)
 ```
 
@@ -30,7 +30,7 @@ src/app/api/
 - Route shape is file-based: one handler module per `route.ts`.
 - Error responses consistently use structured JSON with explicit HTTP statuses (`400` validation, `403` forbidden fields, `503` service unavailable).
 - API tests are co-located with handlers (`route.test.ts` next to `route.ts`); config routes mock `@/lib/omoConfig` / `@/lib/ompConfig`, model routes inject a fake exec via `setExecFn`.
-- `omp models` output is parsed via `omp models --json` (`selector` field); the plain-text line filter is only for `opencode models`.
+- `omp models` output is parsed via `omp models --json --kind all` (`selector` and `kind` fields); the plain-text line filter is only for `opencode models`.
 
 ## ANTI-PATTERNS
 - Do not accept secret-like config keys in `/api/omo-config` or `/api/omp-config`; sensitive field names are explicitly blocked.

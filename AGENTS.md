@@ -7,9 +7,10 @@ OpenCode-ecosystem tools.
 - **OMO (Oh My OpenAgent)** — config at `~/.config/opencode/oh-my-openagent.jsonc`,
   models from the `opencode models` CLI. Full workspace: per-agent forms,
   categories, and profiles (apply/import/export).
-- **OMP (Oh My Pi)** — config at `~/.omp/agent/config.yml` (YAML), models from the
-  `omp models --json` CLI. Model switching is role-based (`modelRoles` map:
-  default, smol, slow, plan, vision, designer, commit, task, advisor, tiny).
+- **OMP (Oh My Pi)** — active global/profile `config.yml` (or existing
+  `config.yaml`), models from `omp models --json --kind all`. Model switching is
+  role-based: default, smol, slow, plan, vision, commit, task, advisor, tiny,
+  memory, image, web, speech, dictation, judge, plus configured custom roles.
 
 The page also warns when the upstream OMO repository
 (`code-yeongyu/oh-my-openagent`) has not been pushed to in over 60 days.
@@ -36,7 +37,7 @@ omx-switch/
 | Config workspace | `src/components/config/ConfigWorkspace.tsx` | agents sidebar + form, categories, profiles tabs |
 | Model dropdown | `src/components/ModelSelector.tsx` | Radix select grouped by provider; swallows spurious `onValueChange('')` |
 | OMO config IO | `src/lib/omoConfig.ts` | read/write/merge + legacy migration |
-| OMP config IO | `src/lib/ompConfig.ts` | `~/.omp/agent/config.yml` (YAML), modelRoles |
+| OMP config IO | `src/lib/ompConfig.ts` | active profile/agent directory, config.yml/config.yaml, modelRoles |
 | Shared validation | `src/lib/configValidation.ts` | secret filtering + field validators |
 | CLI model listing | `src/lib/cliModels.ts` | exec plumbing, timeout env vars, parse hooks |
 | Upstream sync check | `src/app/api/omo-sync/route.ts` | GitHub pushed_at vs 60-day threshold |
@@ -46,7 +47,7 @@ omx-switch/
 - Tests are co-located with source (`*.test.ts`, `*.test.tsx`).
 - Path alias `@/*` maps to `src/*` in both TypeScript and Vitest.
 - OMO and OMP API routes are mirrors; shared logic lives in `src/lib/configValidation.ts` and `src/lib/cliModels.ts`.
-- `omp models` is consumed via `omp models --json` (`selector` field); `opencode models` uses the plain line filter.
+- `omp models` is consumed via `omp models --json --kind all` (`selector` and `kind` fields); `opencode models` uses the plain line filter.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 - Do not send secret-like keys (`api*`, `*token*`, `*secret*`, `*password*`, etc.) to `/api/omo-config` or `/api/omp-config`; requests are rejected with 403.

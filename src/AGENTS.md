@@ -25,9 +25,9 @@ src/
 | Config workspace | `src/components/config/ConfigWorkspace.tsx` | agents sidebar + form, categories, profiles tabs |
 | Model dropdown | `src/components/ModelSelector.tsx` | Radix select, provider grouping, search |
 | OMO config IO | `src/lib/omoConfig.ts` | `~/.config/opencode/oh-my-openagent.jsonc` |
-| OMP config IO | `src/lib/ompConfig.ts` | `~/.omp/agent/config.yml` (YAML) |
+| OMP config IO | `src/lib/ompConfig.ts` | active profile/agent directory, `config.yml` or existing `config.yaml` |
 | Shared field validation | `src/lib/configValidation.ts` | secret filtering + agent/category validators |
-| CLI model listing | `src/lib/cliModels.ts` | exec plumbing for `opencode models` / `omp models --json` |
+| CLI model listing | `src/lib/cliModels.ts` | exec plumbing for `opencode models` / `omp models --json --kind all` |
 
 ## CONVENTIONS
 - Keep Next.js route handlers under `src/app/api/**/route.ts`; avoid ad-hoc API helper entrypoints.

@@ -233,6 +233,24 @@ describe('ModelRolesPanel', () => {
     expect(within(thinkingSelect).queryByRole('option', { name: 'xhigh' })).not.toBeInTheDocument();
   });
 
+  it('drops a thinking suffix when switching to a model without thinking support', async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<ModelRolesPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('omp-role-default-model')).toHaveValue('kimi-code/k3');
+    });
+    await user.selectOptions(screen.getByLabelText('omp-role-smol-model'), 'openai/gpt-5.4');
+    await user.selectOptions(screen.getByLabelText('omp-role-smol-thinking'), 'high');
+    await user.selectOptions(screen.getByLabelText('omp-role-smol-model'), 'kimi-code/k3');
+    expect(screen.getByLabelText('omp-role-smol-thinking')).toHaveValue('');
+    expect(screen.getByLabelText('omp-role-smol-thinking')).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Save/ }));
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+    expect(screen.getByLabelText('omp-role-smol-model')).toHaveValue('kimi-code/k3');
+    expect(screen.getByLabelText('omp-role-smol-thinking')).toHaveValue('');
+  });
+
   it('sends null for a cleared role on save', async () => {
     const user = userEvent.setup();
     renderWithQuery(<ModelRolesPanel />);

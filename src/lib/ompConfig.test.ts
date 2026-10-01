@@ -1,8 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, writeFile, mkdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
+  getConfigDir,
+  getConfigPath,
   isOmpDefaultThinkingLevel,
   readConfig,
   writeConfig,
@@ -55,6 +57,95 @@ describe('readConfig', () => {
     await expect(readConfig(configPath)).rejects.toThrow(
       `Failed to parse OMP config at ${configPath}: Error: config root must be a mapping`
     );
+  });
+});
+
+describe('active OMP configuration', () => {
+  let home: string;
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'omp-active-config-'));
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('PI_CONFIG_DIR', '');
+    vi.stubEnv('PI_CODING_AGENT_DIR', '');
+    vi.stubEnv('PI_PROFILE', '');
+    vi.stubEnv('OMP_PROFILE', '');
+  });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it('reads and updates an existing config.yaml in the overridden agent directory', async () => {
+    const agent = join(home, 'custom-agent');
+    await mkdir(agent);
+    vi.stubEnv('PI_CODING_AGENT_DIR', agent);
+    const alternate = join(agent, 'config.yaml');
+    await writeFile(alternate, 'modelRoles:\n  default: vendor/old\nfutureSetting: keep\n');
+
+    const config = await readConfig();
+    expect(config.modelRoles?.default).toBe('vendor/old');
+    await writeConfig({ ...config, modelRoles: { default: 'vendor/new' } });
+
+    expect(await readConfig()).toEqual({
+      modelRoles: { default: 'vendor/new' },
+      futureSetting: 'keep',
+    });
+    await expect(readFile(join(agent, 'config.yml'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('prefers config.yml when both YAML filenames exist', async () => {
+    const agent = getConfigDir();
+    await mkdir(agent, { recursive: true });
+    await writeFile(join(agent, 'config.yml'), 'modelRoles:\n  default: vendor/canonical\n');
+    await writeFile(join(agent, 'config.yaml'), 'modelRoles:\n  default: vendor/alternate\n');
+
+    expect((await readConfig()).modelRoles?.default).toBe('vendor/canonical');
+    await writeConfig({ modelRoles: { default: 'vendor/updated' } });
+    expect(await readFile(join(agent, 'config.yaml'), 'utf-8')).toContain('vendor/alternate');
+  });
+
+  it('isolates named profile writes and ignores the default agent override', async () => {
+    vi.stubEnv('PI_CONFIG_DIR', '.custom-omp');
+    vi.stubEnv('PI_CODING_AGENT_DIR', join(home, 'override'));
+    vi.stubEnv('PI_PROFILE', 'legacy');
+    vi.stubEnv('OMP_PROFILE', 'work');
+    const path = join(home, '.custom-omp', 'profiles', 'work', 'agent', 'config.yml');
+
+    await writeConfig({ modelRoles: { default: 'vendor/work' } });
+    expect(getConfigPath()).toBe(path);
+    expect(await readFile(path, 'utf-8')).toContain('vendor/work');
+    await expect(readFile(join(home, 'override', 'config.yml'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('uses PI_PROFILE only when OMP_PROFILE is absent, not explicitly empty', () => {
+    vi.stubEnv('PI_PROFILE', 'legacy');
+    vi.stubEnv('OMP_PROFILE', undefined);
+    expect(getConfigDir()).toBe(join(home, '.omp', 'profiles', 'legacy', 'agent'));
+    vi.stubEnv('OMP_PROFILE', '');
+    expect(getConfigDir()).toBe(join(home, '.omp', 'agent'));
+  });
+
+  it('does not adopt an inherited named-profile directory when selecting default', () => {
+    vi.stubEnv('OMP_PROFILE', 'default');
+    vi.stubEnv('PI_PROFILE', 'work');
+    vi.stubEnv('PI_CODING_AGENT_DIR', join(home, '.omp', 'profiles', 'work', 'agent'));
+    expect(getConfigDir()).toBe(join(home, '.omp', 'agent'));
+  });
+
+  it.each(['../work', 'work.', 'CON', 'a/b', 'UPPER'])(
+    'refuses invalid profile %s instead of writing elsewhere',
+    async (profile) => {
+      vi.stubEnv('OMP_PROFILE', profile);
+      await expect(writeConfig({ modelRoles: {} })).rejects.toThrow('Invalid OMP profile');
+    }
+  );
+
+  it('surfaces an unreadable config instead of treating it as empty', async () => {
+    const agent = getConfigDir();
+    await mkdir(join(agent, 'config.yml'), { recursive: true });
+    await expect(readConfig()).rejects.toThrow('Failed to read OMP config');
   });
 });
 

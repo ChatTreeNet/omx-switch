@@ -6,6 +6,7 @@ export type ApiTarget = 'omo' | 'omp';
 export interface TargetConfigResponse {
   agents?: Record<string, AgentConfig>;
   categories?: Record<string, CategoryConfig>;
+  configPath?: string;
   modelRoles?: Record<string, string>;
   modelFallback?: boolean;
   fallbackChains?: Record<string, string[]>;
@@ -15,6 +16,8 @@ export interface TargetConfigResponse {
 
 export interface ModelDetail {
   selector: string;
+  kind?: string;
+  input?: string[];
   reasoning?: boolean;
   variants?: string[];
   thinking?: string[] | null;

@@ -59,6 +59,12 @@ function parseOmpModelsJson(stdout: string): ParsedOmpModels {
     if (selector === null) continue;
 
     const detail: OmpModelDetail = { selector };
+    if (typeof entry.kind === 'string') {
+      detail.kind = entry.kind;
+    }
+    if (Array.isArray(entry.input) && entry.input.every((input) => typeof input === 'string')) {
+      detail.input = entry.input;
+    }
     if (typeof entry.reasoning === 'boolean') {
       detail.reasoning = entry.reasoning;
     }
@@ -78,7 +84,7 @@ function parseOmpModelsJson(stdout: string): ParsedOmpModels {
 export async function GET(): Promise<Response> {
   let modelDetails: OmpModelDetail[] = [];
   const { result, status } = await runModelsCommand({
-    command: 'omp models --json',
+    command: 'omp models --json --kind all',
     sourceName: 'omp',
     timeoutEnvVar: 'OMP_MODELS_TIMEOUT_MS',
     // Cold catalog refreshes can take 30s+; the default 15s kills them

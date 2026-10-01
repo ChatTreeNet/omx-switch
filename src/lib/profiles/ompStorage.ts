@@ -1,15 +1,15 @@
 import { readFile, writeFile, unlink } from 'fs/promises';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { parse, stringify } from 'comment-json';
 import type { Profile, ProfileIndex } from '@/types/omoConfig';
 import {
+  getConfigDir,
   isOmpDefaultThinkingLevel,
   type OmpDefaultThinkingLevel,
 } from '@/lib/ompConfig';
 
-export const OMP_PROFILES_DIR = join(homedir(), '.omp', 'agent', 'profiles');
+export const OMP_PROFILES_DIR = join(getConfigDir(), 'profiles');
 export const OMP_PROFILE_INDEX_PATH = join(OMP_PROFILES_DIR, 'index.json');
 
 /**
