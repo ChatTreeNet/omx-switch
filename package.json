@@ -1,6 +1,6 @@
 {
   "name": "omx-switch",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": false,
   "description": "Model switcher GUI for OMO and OMP",
   "repository": {
